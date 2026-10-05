@@ -1,0 +1,1 @@
+"""Capacitated vehicle routing domain."""

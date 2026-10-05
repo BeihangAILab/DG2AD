@@ -1,0 +1,4 @@
+# @package credit
+order: full
+alpha: 0.1
+aggregation_epsilon: 1.0e-8

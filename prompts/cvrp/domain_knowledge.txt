@@ -1,0 +1,36 @@
+The directed operator graph uses these functions to search the Capacitated Vehicle Routing Problem (CVRP) solution space and minimize total route distance.
+
+[🚨 CRITICAL WARNING ABOUT ENVIRONMENT DATA 🚨]
+The passed `env_data` is a dictionary. Operator code may use these runtime keys:
+`'dist_matrix'`, `'demands'`, `'capacity'`, `'num_nodes'`, `'num_customers'`,
+and `'depot_idx'`.
+Absolutely DO NOT invent or call any other environment keys, otherwise a KeyError will crash the dictionary reading!!
+
+The state sequence represents a route solution as a flat list:
+- Customer node indices are 1-indexed (1 to num_nodes-1, with node 0 being the depot).
+- Routes are separated by DEPOT markers (integer 0).
+- Example: [1,2,3,0,4,5,0,6,7,8] means three routes: [1,2,3], [4,5], [6,7,8] each starting/ending at depot 0.
+- Each customer node MUST appear EXACTLY ONCE across the entire sequence.
+- Each route's total demand sum MUST NOT exceed `capacity`.
+- Do NOT include consecutive zeros or empty routes.
+
+Key CVRP domain knowledge for designing heuristics:
+- The Clarke-Wright savings: sij = dist[0,i] + dist[0,j] - dist[i,j]. Larger savings = better to merge.
+- 2-opt within a route: reverse a segment to reduce distance.
+- Relocate: move a customer from one route to another to reduce cost if capacity permits.
+- Exchange: swap customers between routes.
+- The total cost = sum over routes of (depot→first + sum of inter-customer distances + last→depot).
+
+You MUST strictly check:
+- Array bounds: customer indices must be in range [1, num_nodes-1].
+- Capacity constraints: each route's demand sum ≤ capacity.
+- No duplicate customers: each customer appears exactly once in the sequence.
+- Sequence length must equal num_customers + (num_routes - 1) where num_routes is the count of depot separators + 1.
+
+Violation of these constraints will cause calc_makespan to return 999999999 (invalid solution).
+
+[OBJECTIVE CALLBACK CONTRACT]
+Always evaluate with `calc_makespan_fn(candidate_sequence, env_data)`.
+The sequence is the FIRST argument and `env_data` is the SECOND argument.
+Never reverse these two arguments. After accepting a candidate, update both
+`state.sequence` and `state.makespan` consistently.

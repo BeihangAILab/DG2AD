@@ -1,0 +1,10 @@
+# @package llm
+provider: openai
+backbone_id: gpt-5.6-sol
+api_key: ${oc.env:OPENAI_API_KEY, ""}
+base_url: ${oc.env:OPENAI_BASE_URL, "https://api.openai.com/v1"}
+model_name: ${oc.env:OPENAI_MODEL_NAME, "gpt-5.6-sol"}
+temperature: 0.7
+max_calls: 500
+request_timeout_seconds: 60.0
+retries: 2

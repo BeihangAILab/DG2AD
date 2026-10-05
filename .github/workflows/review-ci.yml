@@ -1,0 +1,52 @@
+name: review-artifact-ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-checks:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.10", "3.13"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - name: Install test dependencies
+        shell: bash
+        run: |
+          if [[ "${{ matrix.python }}" == "3.13" ]]; then
+            python -m pip install -r requirements-test-py313.txt
+          else
+            python -m pip install -r requirements-test.txt
+          fi
+      - name: Ruff
+        run: python -m ruff check .
+      - name: Unit tests
+        env:
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
+          LLM_API_KEY: ""
+          LLM_BASE_URL: ""
+          LLM_MODEL_NAME: ""
+        run: python -m unittest discover -s tests -v
+      - name: Python 3.13 training-stack import
+        if: matrix.python == '3.13'
+        run: python -c "import torch, transformers, peft, numba; print(torch.__version__)"
+      - name: Offline smoke
+        env:
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
+          LLM_API_KEY: ""
+          LLM_BASE_URL: ""
+          LLM_MODEL_NAME: ""
+        run: python quickstart.py

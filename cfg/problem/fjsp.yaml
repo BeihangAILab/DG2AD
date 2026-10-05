@@ -1,0 +1,3 @@
+name: fjsp
+target_group: brandimarte
+node_ablation_level: 20 # Options: 4, 8, 15, 20. Default is 20 (all nodes).

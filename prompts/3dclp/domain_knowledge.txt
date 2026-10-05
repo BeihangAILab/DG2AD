@@ -1,0 +1,115 @@
+3D Container Loading Problem (3DCLP) Domain Knowledge
+========================================================
+
+PROBLEM DEFINITION
+------------------
+Given a set of N 3D rectangular items and a single rectangular container of
+fixed dimensions (W, H, D), the goal is to pack as many items as possible
+into the container to MAXIMIZE volume utilization (fill rate).
+
+Items have up to 6 axis-aligned orientations, restricted by the per-item
+`orientation_allowed` flags loaded from BR's C1_Length/C1_Height/C1_Depth.
+Only orientations whose original vertical edge is permitted may be evaluated:
+  (w,h,d), (w,d,h), (h,w,d), (h,d,w), (d,w,h), (d,h,w)
+
+Items that cannot fit in any orientation are simply SKIPPED (not packed).
+This is a single-container problem -- there is only ONE bin/container.
+
+ENCODING: PRIORITY-BASED SEQUENCE
+----------------------------------
+The solution is a permutation (priority ordering) of item indices [0, 1, ..., N-1].
+Items are packed in this order, one by one, into the container using the
+Extreme Points (EP) First-Fit heuristic decoder.
+
+HOW THE DECODER WORKS
+----------------------
+For each item in the priority sequence:
+  1. Gather Extreme Points (EP) from all already-placed items:
+     - (x+w, y, z), (x, y+h, z), (x, y, z+d) for each placed item
+     - Plus the origin (0, 0, 0)
+  2. Sort EP candidates by: z first (bottom), then y (closer), then x (left).
+     This implements Bottom-Left-Front (BLF) fill policy.
+  3. For each EP point, try only C1-permitted rotation orientations.
+  4. Place the item at the first feasible EP point with no overlap and
+     within container bounds.
+  5. If no feasible placement exists for this item, SKIP it and continue
+     to the next item in the priority sequence.
+
+OBJECTIVE FUNCTION
+-------------------
+  fill_rate_pct = (total volume of packed items) / (container volume) * 100.0
+  objective = 100.0 - fill_rate_pct
+
+  THIS IS A MINIMISATION PROBLEM. Lower objective = better.
+  - objective = 0 means 100% fill rate (perfect packing, usually impossible)
+  - objective = 100 means 0% fill rate (nothing packed)
+
+  The objective is continuous (not discrete), which allows the search to
+  differentiate between solutions with the same number of packed items
+  but different space utilization.
+
+ENV_DATA KEYS
+-------------
+  - num_activities (int): number of items N
+  - bin_size (np.array of [W, H, D]): container dimensions (fixed: 587, 233, 220)
+  - item_sizes (np.array shape (N, 3), dtype int32): [w, h, d] per item
+  - item_volumes (np.array shape (N,), dtype int32): volume = w*h*d per item
+  - fill_upper_bound (float): theoretical fill-rate upper bound from total item volume
+  - bks_fill_rate (float or None): auxiliary heuristic reference, not used as an upper bound
+  - upper_bound (float): residual-space lower bound, 100 - fill_upper_bound
+  - lower_bound (float): same as upper_bound (for compatibility)
+  - name (str): instance name (e.g., "BR1_5")
+
+HEURISTIC DESIGN HINTS
+-----------------------
+1. Large items first: Place items with larger volume/dimensions earlier,
+   as they are harder to fit later and block more space.
+2. Dimensional compatibility: Consider how item dimensions match the
+   container dimensions. Items that closely match one dimension of the
+   container are good "base layer" candidates.
+3. Rotation awareness: Items with extreme aspect ratios (long+thin, flat+wide)
+   benefit more from rotation -- prioritize them when their best orientation
+   fits remaining gaps.
+4. Corner filling: After placing large items, prioritize medium-sized items
+   that can fill the corners and edges left behind.
+5. Sequence neighborhood: Swapping adjacent items in the priority list
+   often yields smaller, more targeted changes than random swaps.
+6. Feature-based scoring: Normalize item features (volume, max dimension,
+   aspect ratio, tightness to bin dimensions) to Z-scores and combine
+   them into a composite priority score. This handles items of varying
+   scales robustly.
+
+SLOT SIGNATURES
+---------------
+All slot functions must follow this signature:
+  def run(env_data, state, calc_makespan_fn):
+      ...
+      return state
+
+  - env_data: one instance returned by load_instance_group(group)
+  - state: SolutionState with .sequence (np.array), .makespan (float), .metadata (dict)
+  - calc_makespan_fn: callable that takes (sequence, env_data) and returns float
+
+The state.sequence must be a numpy array of dtype int32 containing a valid
+permutation of [0, 1, ..., N-1] (all item indices exactly once).
+
+[OPERATOR CONTRACT]
+- Always call `calc_makespan_fn(candidate_or_state, env_data)` in that order.
+- A committed candidate must update both `state.sequence` and `state.makespan`.
+- Initialization returns a legal permutation; local search commits only a real improvement.
+- Perturbation must produce a different legal permutation when one exists, even if temporarily worse.
+- Acceptance compares against `metadata['prev_makespan']` and restores `prev_sequence` when rejected.
+
+[V-LEVEL OPERATOR ROLES]
+- V=4 is the seed pipeline: volume-descending initialization, swap perturbation,
+  budgeted (at most three candidates per call) 2-opt improvement, and
+  simulated-annealing acceptance.
+- V=8 adds random construction, adjacent-swap/insert improvement, and insert mutation.
+- V=15 adds dimension/layer-aware construction, block relocation, block reversal,
+  partial scrambling, random-walk diversification, and bounded VNS.
+- V=20 adds partial-shuffle diversification, ruin-and-reinsert, iterated greedy,
+  late acceptance, and ordered elite crossover.
+- Because EP decoding is expensive, every local-search or intensification call must
+  use a small bounded evaluation budget. Initialization resets best/previous metadata;
+  improvement nodes commit only strict improvements, while diversity nodes preserve
+  a complete permutation and must change it when N > 1.

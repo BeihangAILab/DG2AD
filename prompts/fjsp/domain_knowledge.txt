@@ -1,0 +1,64 @@
+The directed operator graph uses these functions to search the Flexible Job-Shop Scheduling Problem (FJSP) solution space and minimize makespan.
+
+[CRITICAL WARNING ABOUT ENVIRONMENT DATA]
+The passed `env_data` is a dictionary. You CAN and MUST ONLY use these core keys:
+  `'num_jobs'`           — int, number of jobs
+  `'num_machines'`       — int, number of machines
+  `'op_counts'`          — np.ndarray (num_jobs,), number of operations per job
+  `'eligible_counts'`    — np.ndarray (num_jobs, max_ops), number of eligible machines per (job, op)
+  `'machines_matrix'`    — np.ndarray (num_jobs, max_ops, max_eligible), machine ID per option
+  `'times_matrix'`       — np.ndarray (num_jobs, max_ops, max_eligible), processing time per option
+  `'max_ops'`            — int, maximum number of operations among all jobs (= eligible_counts.shape[1])
+  `'max_operations'`     — compatibility alias for max_ops
+  `'num_ops'`            — compatibility alias for op_counts
+  `'total_ops'`          — int, total number of operations across all jobs (= sum(op_counts))
+  `'processing_matrix'`  — np.ndarray (num_jobs, max_ops, num_machines), processing time by actual machine ID
+
+Absolutely DO NOT invent or call any other environment keys, otherwise a KeyError will crash the dictionary reading.
+
+[DATA STRUCTURE]
+The solution is a dual-chromosome representation:
+  1. OS (Operation Sequence): a 1D array of length total_ops. Contains job index j exactly op_counts[j] times.
+     Stored in `state.sequence` (numpy int32 array).
+  2. MS (Machine Allocation): a 2D array of shape [num_jobs, max_ops]. Entry [j, o] is the ACTUAL
+     machine ID selected for operation o of job j and must be eligible in processing_matrix[j, o].
+     Store it in `state.metadata['machine_alloc']` (numpy int32 array).
+
+To evaluate a (sequence, machine_selection) pair, call:
+    calc_makespan_fn(state, env_data)
+This internally extracts state.sequence and state.metadata['machine_alloc'], simulates the schedule, and returns the makespan.
+
+[CONSTRAINTS]
+  - For any operation (job_idx, op_idx), `machine_alloc[job_idx, op_idx]` stores an
+    ACTUAL machine ID. It must occur among the non-negative values in
+    machines_matrix[job_idx, op_idx, :]; otherwise the assignment is ineligible
+    and makespan = 999999999.
+  - The sequence array MUST have length == total_ops.
+  - Each job j MUST appear exactly op_counts[j] times in the sequence.
+  - All array indices MUST stay within bounds to prevent IndexError or out-of-range access.
+
+[EVALUATION FUNCTION]
+The calc_makespan_fn(state, env_data) simulates the schedule chronologically:
+  - Iterates through the OS in order.
+  - For each job_id at position pos, looks up its next unscheduled operation op_idx.
+  - Reads the actual machine ID from MS[job_id, op_idx], then obtains its
+    processing time from processing_matrix[job_id, op_idx, machine_id].
+  - Schedules the operation at max(machine_available[selected_machine], job_available[job_id]).
+  - Updates machine and job available times.
+  - Returns the maximum completion time across all machines (makespan).
+
+[SLOT FUNCTION SIGNATURE]
+Every slot function must have the signature:
+    def run(env_data, state, calc_makespan_fn):
+        # ... modify state.sequence and/or state.metadata['machine_alloc'] ...
+        # call calc_makespan_fn(state, env_data) to evaluate
+        return state
+
+[OPERATOR CONTRACT]
+- The objective callback order is always `calc_makespan_fn(candidate_or_state, env_data)`.
+- When committing a candidate, update both `state.sequence` and `state.makespan`.
+- Evaluate every trial OS/MS pair as a full state: copy the state, set trial.sequence and trial.metadata["machine_alloc"] to the proposed values, then call calc_makespan_fn(trial, env_data). A bare sequence uses the current state allocation; binding a global allocation does not change the callback's trial allocation.
+- You may use domain_evaluator.evaluate_trial(state, trial_sequence, trial_allocation, env_data, calc_makespan_fn).
+- Initialization creates a legal OS/MS pair; local search commits only a real improvement.
+- Perturbation must preserve legality and produce a different pair when a legal move exists, even if temporarily worse.
+- Acceptance compares with `metadata['prev_makespan']` and restores both sequence and machine allocation on rejection.

@@ -1,0 +1,19 @@
+# @package _global_
+
+defaults:
+  - override /llm: gpt_5_6_sol
+  - override /credit: first
+
+engine:
+  generations: 50
+
+hydra:
+  mode: MULTIRUN
+  sweep:
+    dir: runs/experiments/structure_ablation
+    subdir: ${problem.name}/${structure.name}/seed-${engine.seed}
+  sweeper:
+    params:
+      problem: cvrp,fjsp,mis,3dclp
+      structure: fixed,linear,dag,dg
+      engine.seed: 0,1,2,3,4,5,6,7,8,9

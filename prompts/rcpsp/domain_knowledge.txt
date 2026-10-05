@@ -1,0 +1,98 @@
+Resource-Constrained Project Scheduling Problem (RCPSP) Domain Knowledge
+========================================================================
+
+PROBLEM DEFINITION
+------------------
+Given N activities (including dummy start and dummy end), R renewable
+resources with limited capacities, and precedence constraints between
+activities, the goal is to schedule all activities to minimize the
+makespan (project completion time).
+
+Each activity j has:
+  - duration   d[j]
+  - resource requests req[j, r] for each resource r
+  - precedence constraints: set of predecessor activities that must
+    finish before j can start
+
+Resources are renewable: the capacity of resource r is regained when
+an activity finishes using it.
+
+The dummy start (activity 0) and dummy end (activity N-1) have zero
+duration and zero resource requests.
+
+ENCODING: TOPOLOGICAL PERMUTATION
+----------------------------------
+The solution is a topological ordering (permutation) of activity IDs
+[0, 1, ..., N-1] that respects ALL precedence constraints.
+
+Precedence constraint: for every edge (u -> v), u must appear BEFORE
+v in the sequence.
+
+DECODER: SERIAL SGS
+-------------------
+The Serial Schedule Generation Scheme processes activities in the
+given sequence order. For each activity:
+  1. Determine earliest start time: max(finish_time of all predecessors)
+  2. From that time, find the earliest contiguous interval [t, t+dur]
+     where resource capacity is NOT exceeded for ANY resource at ANY
+     time unit within the interval.
+  3. Allocate the activity at time t, update resource usage.
+
+OBJECTIVE: MINIMISE MAKESPAN
+-----------------------------
+makespan = max finish time across all activities (effectively the
+finish time of the dummy end activity). Lower is better.
+
+ENV_DATA KEYS
+-------------
+  - num_activities (int): number of activities N
+  - num_resources (int): number of renewable resources R
+  - durations (np.array shape (N,)): duration of each activity
+  - requests (np.array shape (N, R)): resource consumption per activity
+  - capacities (np.array shape (R,)): resource availability per period
+  - adj_matrix (np.array shape (N, N), bool): adjacency matrix of
+    precedence graph (adj[i,j]=True means i must precede j)
+  - edges (np.array shape (E, 2)): edge list of precedence constraints
+  - upper_bound (float): best known makespan for this instance
+
+HEURISTIC DESIGN HINTS
+-----------------------
+1. Topological validity is ESSENTIAL: any sequence that violates
+   precedence constraints will be rejected (penalty value). Use
+   in-degree based construction or edge-aware mutation operators.
+2. Critical path length: prioritise activities on the longest path
+   from source to sink (highest total duration chain).
+3. Resource bottleneck: prioritise activities that use scarce resources
+   (high demand relative to capacity).
+4. LST (Latest Start Time): activities with earlier LSTs are on the
+   critical path and should be scheduled earlier.
+5. Most Total Successors (MTS): activities that unblock many other
+   activities should be scheduled earlier.
+6. Greatest Resource Demand (GRD): prioritise activities with high
+   resource usage to avoid resource contention later.
+7. Swap neighborhood: when swapping two positions in the sequence,
+   verify topological validity. Only swaps that move an activity
+   between its last predecessor and first successor are valid.
+
+SLOT SIGNATURES
+---------------
+All slot functions must follow this signature:
+  def run(env_data, state, calc_makespan_fn):
+      ...
+      return state
+
+  - env_data: one instance returned by load_instance_group(group)
+  - state: SolutionState with .sequence (np.array of int32),
+    .makespan (float), .metadata (dict)
+  - calc_makespan_fn: callable that takes (sequence, env_data)
+    and returns float makespan
+
+The state.sequence must be a numpy int32 array containing a valid
+topological permutation of [0, 1, ..., N-1].
+
+[OPERATOR CONTRACT]
+- Always call `calc_makespan_fn(candidate_or_state, env_data)` in that order.
+- A committed candidate must update both `state.sequence` and `state.makespan`.
+- Initialization and every move must preserve precedence feasibility.
+- Local search commits only a real improvement; perturbation produces a different legal order when one exists.
+- Acceptance compares against `metadata['prev_makespan']` and restores `prev_sequence` when rejected.

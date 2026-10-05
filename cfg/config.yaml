@@ -1,0 +1,96 @@
+defaults:
+  - problem: 3dclp
+  - llm: openai_compatible
+  - credit: first
+  - structure: dg
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+  - _self_
+
+hydra:
+  run:
+    dir: runs/${problem.name}/${now:%Y-%m-%d_%H-%M-%S}
+  output_subdir: null
+
+engine:
+  action: train
+  seed: 0
+  run_tier: full
+  generations: 50
+  candidates_per_generation: 4
+  shared_instances_per_generation: 3
+  pipeline_steps: 500
+  pipeline_timeout: 90.0
+  evaluator_workers: 4
+  failure_reward: -5.0
+  reward_epsilon: 1.0e-8
+
+dataset:
+  root: data
+  train_ratio: 0.60
+  validation_ratio: 0.20
+  test_ratio: 0.20
+  split_seed: 0
+
+policy:
+  model_name: Qwen/Qwen2.5-0.5B-Instruct
+  # Immutable Hugging Face revision used by the tested review environment.
+  revision: 7ae557604adf67be50417f59c2c2f167def9a775
+  cache_dir: .model_cache/huggingface
+  local_files_only: false
+  device: auto
+  dtype: auto
+  cuda_memory_fraction: 0.85
+  gradient_checkpointing: true
+  # These limits keep explicit CPU quick-tier runs responsive.
+  cpu_threads: 4
+  cpu_interop_threads: 1
+  learning_rate: 1.0e-4
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  lora:
+    rank: 8
+    alpha: 16
+    dropout: 0.05
+    target_modules: [q_proj, v_proj]
+
+initialization:
+  retries: 2
+  max_operator_count:
+    fallback: 20
+    min: 4
+    max: 20
+    llm_select: true
+  max_pipeline_length:
+    fallback: 10
+    min: 4
+    max: 10
+    llm_select: false
+  sampling_temperature:
+    fallback: 0.7
+    min: 0.1
+    max: 1.0
+    llm_select: false
+
+evolution:
+  operator_interval: 1
+  operator_changes_per_event: 1
+  graph_interval: 1
+  max_added_edges: 1
+  max_deleted_edges: 1
+  max_versions_per_node: 10
+
+validation:
+  interval: 5
+  beam_size: 4
+
+checkpoint:
+  resume: false
+  save_last: true
+  save_best: true
+
+logging:
+  level: INFO
+  color: auto
+  show_candidates: true
+  third_party_level: WARNING

@@ -1,0 +1,10 @@
+# @package llm
+provider: deepseek
+backbone_id: deepseek-v4-flash
+api_key: ${oc.env:DEEPSEEK_API_KEY, ""}
+base_url: ${oc.env:DEEPSEEK_BASE_URL, "https://api.deepseek.com"}
+model_name: ${oc.env:DEEPSEEK_MODEL_NAME, "deepseek-v4-flash"}
+temperature: 0.7
+max_calls: 500
+request_timeout_seconds: 60.0
+retries: 2

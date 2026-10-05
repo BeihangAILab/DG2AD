@@ -1,0 +1,9 @@
+# @package llm
+provider: openai_compatible
+api_key: ${oc.env:LLM_API_KEY, ""}
+base_url: ${oc.env:LLM_BASE_URL, ""}
+model_name: ${oc.env:LLM_MODEL_NAME, ""}
+temperature: ${oc.env:LLM_TEMPERATURE, 0.7}
+max_calls: 500
+request_timeout_seconds: 60.0
+retries: 2

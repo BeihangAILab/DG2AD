@@ -1,0 +1,1 @@
+"""Maximum independent set domain."""

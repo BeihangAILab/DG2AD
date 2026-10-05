@@ -1,0 +1,90 @@
+Travelling Salesman Problem (TSP) Domain Knowledge
+=====================================================
+
+PROBLEM DEFINITION
+------------------
+Given N cities with 2D coordinates, find the shortest Hamiltonian cycle
+that visits each city exactly once and returns to the starting city.
+
+Distance metric: EUC_2D (TSPLIB standard)
+  dist[i,j] = int(sqrt((x_i-x_j)^2 + (y_i-y_j)^2) + 0.5)
+
+The objective is to minimise the total tour length.
+
+ENCODING: PERMUTATION OF CITY INDICES
+--------------------------------------
+The solution is a permutation (tour) of city indices [0, 1, ..., N-1].
+The tour visits cities in order: seq[0] -> seq[1] -> ... -> seq[N-1] -> seq[0].
+
+The tour is cyclic: any rotation of the same sequence represents the
+same tour. By convention, city 0 is often fixed as the start.
+
+ENV_DATA KEYS
+-------------
+  - num_nodes (int): number of cities N
+  - coords (np.ndarray shape (N, 2)): [x, y] coordinates
+  - distance_matrix (np.ndarray shape (N, N)): precomputed EUC_2D distances
+  - upper_bound (float): best known solution (BKS) tour length
+
+HEURISTIC DESIGN HINTS
+-----------------------
+1. Nearest Neighbour (NN): Start at a city, then repeatedly visit the
+   nearest unvisited city. Fast but usually suboptimal.
+2. 2-opt: Remove two edges from the tour and reconnect the two resulting
+   segments in the opposite direction. This is the most important local
+   search move for TSP.
+   - Delta evaluation: gain = (dist[a][b] + dist[c][d]) - (dist[a][c] + dist[b][d])
+   - If gain > 0, the 2-opt move improves the tour.
+3. 3-opt: Remove three edges and reconnect. More powerful but more
+   expensive than 2-opt.
+4. Or-opt: Remove a segment of 2-3 consecutive cities and reinsert it
+   elsewhere in the tour.
+5. Node swap: Swap two cities in the tour. Simpler than 2-opt but often
+   less effective.
+6. Insertion: Remove a city and reinsert it at the best position.
+7. Simulated Annealing: Accept worsening moves with probability
+   exp(-delta/T) where T decreases over time.
+8. Hybrid approaches: 2-opt for local refinement + perturbation for
+   diversification.
+
+GREEDY CONSTRUCTION HEURISTICS
+-------------------------------
+- Nearest Neighbour: O(N^2) per start city.
+- Cheapest Insertion: Start with a subtour, repeatedly insert the city
+  that causes the smallest increase in tour length.
+  - Best insertion position for city k between cities i and j:
+    delta = dist[i][k] + dist[k][j] - dist[i][j]
+- Farthest Insertion: Insert the city whose minimum distance to current
+  tour is largest.
+- Clarke-Wright Savings: Start with N separate routes from a depot,
+  merge routes with the largest savings.
+
+OPERATOR DESIGN NOTES
+----------------------
+1. Delta evaluation for 2-opt: Only compute the 4-edge delta, not the
+   full tour length. This is O(1) per evaluation instead of O(N).
+2. Reverse segment: seq[i+1:j+1] = reversed(seq[i+1:j+1]) in Python.
+3. Avoid recomputing the full distance matrix.
+
+SLOT SIGNATURES
+---------------
+All slot functions must follow this signature:
+  def run(env_data, state, calc_makespan_fn):
+      ...
+      return state
+
+  - env_data: one instance returned by load_instance_group(group)
+  - state: SolutionState with .sequence (np.array of int32),
+    .makespan (float), .metadata (dict)
+  - calc_makespan_fn: callable that takes (sequence, env_data)
+    and returns float tour length
+
+The state.sequence must be a numpy int32 array containing a valid
+permutation of [0, 1, ..., N-1].
+
+[OPERATOR CONTRACT]
+- Always call `calc_makespan_fn(candidate_or_state, env_data)` in that order.
+- A committed candidate must update both `state.sequence` and `state.makespan`.
+- Initialization returns a legal tour; local search commits only a real improvement.
+- Perturbation must produce a different legal tour when one exists and may be temporarily worse.
+- Acceptance compares against `metadata['prev_makespan']` and restores `prev_sequence` when rejected.

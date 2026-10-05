@@ -1,0 +1,79 @@
+3D Bin Packing Problem (3DBPP) Domain Knowledge
+====================================================
+
+PROBLEM DEFINITION
+------------------
+Given a set of N items, each with dimensions (width, height, depth), and bins of
+fixed size (W, H, D), the goal is to pack ALL items into the minimum number of
+bins. Items cannot overlap, must fit entirely within a bin, and cannot be
+rotated (fixed orientation).
+
+ENCODING: PRIORITY-BASED SEQUENCE
+----------------------------------
+The solution is a permutation (priority ordering) of item indices [0, 1, ..., N-1].
+Items are packed in this order, one by one, into bins using the Extreme Points
+(EP) First-Fit heuristic decoder.
+
+HOW THE DECODER WORKS (serial_sgs)
+-----------------------------------
+For each item in the priority sequence:
+  1. Try to place it into each existing bin (First-Fit order).
+  2. In each bin, generate EP candidate points from already-placed items:
+     - (x+w, y, z), (x, y+h, z), (x, y, z+d) for each placed item
+     - Plus the origin (0, 0, 0)
+  3. Sort candidate points by: z first (bottom), then y (closer), then x (left).
+     This implements Bottom-Left-Front (BLF) fill policy.
+  4. Place the item at the first feasible EP point with no overlap.
+  5. If no existing bin can accommodate the item, open a new bin at (0, 0, 0).
+
+OBJECTIVE FUNCTION
+-------------------
+  objective = bins + (1.0 - last_bin_utilization) * 0.1
+
+  - bins: integer count of bins used
+  - last_bin_utilization: volume utilization of the last bin (0 to 1)
+  - The fractional term (1.0 - util) * 0.1 acts as a tie-breaker:
+    among solutions with the same number of bins, prefer the one with
+    higher last-bin utilization (easier to improve).
+
+  THIS IS A MINIMISATION PROBLEM. Lower objective = better.
+
+ENV_DATA KEYS
+-------------
+  - num_activities (int): number of items N
+  - bin_size (np.array of [W, H, D]): bin dimensions
+  - item_sizes (np.array shape (N, 3)): [w, h, d] per item
+  - item_volumes (np.array shape (N,)): volume = w*h*d per item
+  - upper_bound (float): best known solution (BKS) bin count
+
+HEURISTIC DESIGN HINTS
+-----------------------
+1. Large items first: Place items with larger volume/dimensions earlier,
+   as they are harder to fit later.
+2. Dimensional considerations: Account for item shape compatibility
+   (e.g., long items vs flat items).
+3. Bin utilization: Prioritize items that fit well with what's already
+   in partially-filled bins.
+4. Sequence neighborhood: Swapping adjacent items in the priority list
+   often yields smaller changes than random swaps.
+
+SLOT SIGNATURES
+---------------
+All slot functions must follow this signature:
+  def run(env_data, state, calc_makespan_fn):
+      ...
+      return state
+
+  - env_data: one instance returned by load_instance_group(group)
+  - state: SolutionState with .sequence (np.array), .makespan (float), .metadata (dict)
+  - calc_makespan_fn: callable that takes (sequence, env_data) and returns float
+
+The state.sequence must be a numpy array of dtype int32 containing a valid
+permutation of [0, 1, ..., N-1].
+
+[OPERATOR CONTRACT]
+- Always call `calc_makespan_fn(candidate_or_state, env_data)` in that order.
+- A committed candidate must update both `state.sequence` and `state.makespan`.
+- Initialization returns a legal permutation; local search commits only a real improvement.
+- Perturbation must produce a different legal permutation when one exists, even if temporarily worse.
+- Acceptance compares against `metadata['prev_makespan']` and restores `prev_sequence` when rejected.

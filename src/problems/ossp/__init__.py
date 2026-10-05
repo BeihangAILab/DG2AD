@@ -1,0 +1,1 @@
+"""Open shop scheduling domain."""

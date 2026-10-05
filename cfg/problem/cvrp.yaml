@@ -1,0 +1,3 @@
+name: cvrp
+target_group: CMT
+node_ablation_level: 8

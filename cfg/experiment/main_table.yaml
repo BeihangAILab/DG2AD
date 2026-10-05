@@ -1,0 +1,19 @@
+# @package _global_
+
+defaults:
+  - override /structure: dg
+  - override /credit: first
+
+engine:
+  generations: 50
+
+hydra:
+  mode: MULTIRUN
+  sweep:
+    dir: runs/experiments/main_table
+    subdir: ${problem.name}/${llm.backbone_id}/seed-${engine.seed}
+  sweeper:
+    params:
+      problem: tsp,fjsp,mis,3dclp
+      llm: deepseek_v4_flash,gpt_5_6_sol
+      engine.seed: 0,1,2,3,4,5,6,7,8,9

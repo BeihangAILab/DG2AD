@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "hash_algorithm": "sha256-length-prefixed-relative-path-and-content",
+  "datasets": [
+    {
+      "problem": "3dbbp",
+      "group": "MPV_n10",
+      "source_page": "https://doi.org/10.1287/opre.48.2.256.12386",
+      "citation": "Martello, Pisinger, and Vigo (2000), The Three-Dimensional Bin Packing Problem.",
+      "redistribution": "not bundled; obtain from the benchmark owner and check its current terms",
+      "patterns": ["MPV/instance_n10_*.txt", "3dbpp_instances_db.json"],
+      "file_count": 81,
+      "byte_count": 111225,
+      "tree_sha256": "4b68981752ebb106b950d0c96160e4f814d9202f8c6f57dde79b830161067e46"
+    },
+    {
+      "problem": "3dclp",
+      "group": "BR",
+      "source_page": "https://doi.org/10.1016/0377-2217(94)00015-G",
+      "citation": "Bischoff and Ratcliff (1995), Issues in the development of approaches to container loading.",
+      "redistribution": "not bundled; obtain from the benchmark owner and check its current terms",
+      "patterns": ["3dclp_instances/*.json", "3dclp_bks.json"],
+      "file_count": 151,
+      "byte_count": 856205,
+      "tree_sha256": "0421e53a28ff1147657f30698b814e49452ceff4f35b68b96624879884e7daa0"
+    },
+    {
+      "problem": "cvrp",
+      "group": "CMT",
+      "source_page": "http://vrp.atd-lab.inf.puc-rio.br/index.php/en/",
+      "citation": "Christofides, Mingozzi, and Toth CVRP instances, distributed through CVRPLIB.",
+      "redistribution": "not bundled; obtain from CVRPLIB and check its current terms",
+      "patterns": ["CMT/*"],
+      "file_count": 28,
+      "byte_count": 55760,
+      "tree_sha256": "77abb2ed39af4a8a219a7b0ca96eb42477b5fb93f6256bc463778c0b32478d17"
+    },
+    {
+      "problem": "fjsp",
+      "group": "brandimarte",
+      "source_page": "https://doi.org/10.1016/0925-5273(93)90048-M",
+      "citation": "Brandimarte (1993), Routing and scheduling in a flexible job shop by tabu search.",
+      "redistribution": "not bundled; obtain from the benchmark owner and check its current terms",
+      "patterns": ["brandimarte/*.txt", "instances.json"],
+      "file_count": 16,
+      "byte_count": 94141,
+      "tree_sha256": "b90d1c0ac07943fac27c87f2d287d0505ffe8361119150b37e260ca4f26684bf"
+    },
+    {
+      "problem": "fssp",
+      "group": "tai20_5",
+      "source_page": "https://doi.org/10.1016/0377-2217(93)90182-M",
+      "citation": "Taillard (1993), Benchmarks for basic scheduling problems.",
+      "redistribution": "not bundled; obtain from the benchmark owner and check its current terms",
+      "patterns": ["fssp_instances.json"],
+      "file_count": 1,
+      "byte_count": 898361,
+      "tree_sha256": "dea2847c0846ef2a01ac80980d4bfdbb9dfba59fad5ea7259e2c00495652b896"
+    },
+    {
+      "problem": "jsp",
+      "group": "ta",
+      "source_page": "https://doi.org/10.1016/0377-2217(93)90182-M",
+      "citation": "Taillard (1993), Benchmarks for basic scheduling problems.",
+      "redistribution": "not bundled; obtain from the benchmark owner and check its current terms",
+      "patterns": ["jsp_instances.json"],
+      "file_count": 1,
+      "byte_count": 665207,
+      "tree_sha256": "ae3c91ee54a05e5fbe425885b9aadb79ec39a387953ab332f36a28513b3bc653"
+    },
+    {
+      "problem": "max_cut",
+      "group": "G-set",
+      "source_page": "https://web.stanford.edu/~yyye/yyye/Gset/",
+      "citation": "G-set weighted Max-Cut benchmark instances.",
+      "redistribution": "not bundled; obtain from the benchmark page and check its current terms",
+      "patterns": ["G*.txt", "gset_bks.json"],
+      "file_count": 49,
+      "byte_count": 7486593,
+      "tree_sha256": "e4adf16af29cd1e93783d9986889cae02aaa7c5bc300112ef818e0ca7ac6423f"
+    },
+    {
+      "problem": "mis",
+      "group": "DIMACS_subset",
+      "source_page": "https://dimacs.rutgers.edu/programs/challenge/",
+      "citation": "Second DIMACS Challenge maximum clique instances, evaluated through graph complementation.",
+      "redistribution": "not bundled; obtain from DIMACS or the benchmark owner and check its current terms",
+      "patterns": ["DIMACS_subset/*.clq", "mis_bks.json"],
+      "file_count": 35,
+      "byte_count": 89776438,
+      "tree_sha256": "d0a1b4f58677399906edbcf99263830cc739142a48bab6159c05896c247f8e6f"
+    },
+    {
+      "problem": "ossp",
+      "group": "tai10_10",
+      "source_page": "https://doi.org/10.1016/0377-2217(93)90182-M",
+      "citation": "Taillard (1993), Benchmarks for basic scheduling problems.",
+      "redistribution": "not bundled; obtain from the benchmark owner and check its current terms",
+      "patterns": ["ossp_instances.json"],
+      "file_count": 1,
+      "byte_count": 52415,
+      "tree_sha256": "8749e54e3be575f987e632de2f6761763637f851f74fded423f1f8c3a49bf9e0"
+    },
+    {
+      "problem": "rcpsp",
+      "group": "j30",
+      "source_page": "https://www.om-db.wi.tum.de/psplib/",
+      "citation": "PSPLIB single-mode j30 RCPSP instances.",
+      "redistribution": "not bundled; obtain from PSPLIB and check its current terms",
+      "patterns": ["j30.sm/*.sm", "j30_sm_merged.json", "rcpsp_bks.json"],
+      "file_count": 482,
+      "byte_count": 2059079,
+      "tree_sha256": "03e1bf7311420eeb4fcc801b1a1cf2eb41e6c5327452b08db195a44d41310e09"
+    },
+    {
+      "problem": "salbp",
+      "group": "small",
+      "source_page": "https://assembly-line-balancing.de/salbp/benchmark-data-sets-1993/",
+      "citation": "Scholl (1993) SALBP benchmark data sets.",
+      "redistribution": "not bundled; obtain from the benchmark page and check its current terms",
+      "patterns": ["small data set_n=20/*.alb"],
+      "file_count": 525,
+      "byte_count": 214674,
+      "tree_sha256": "0e87026e5d1905100991f1fcbd693772ca441190866e904ff920a23c9eab2215"
+    },
+    {
+      "problem": "tsp",
+      "group": "tsplib",
+      "source_page": "http://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/",
+      "citation": "Reinelt (1991), TSPLIB: A traveling salesman problem library.",
+      "redistribution": "not bundled; obtain from TSPLIB and check its current terms",
+      "patterns": ["tsplib/*.tsp", "tsp_bks.json"],
+      "file_count": 36,
+      "byte_count": 88455,
+      "tree_sha256": "96c7995db0bde6cdd78e4c6c51d2138fcdd91a2ad7d3d60b5782c06f011487e3"
+    }
+  ]
+}

@@ -1,0 +1,81 @@
+Open Shop Scheduling Problem (OSSP) Domain Knowledge
+======================================================
+
+PROBLEM DEFINITION
+------------------
+Given N jobs and M machines, each job must be processed on each machine
+exactly once. The order in which a job visits the machines is free (open).
+Operations of the same job cannot overlap (no job can be on two machines
+simultaneously). Operations on the same machine cannot overlap (one job
+at a time per machine). Preemption is not allowed.
+
+The objective is to minimise the makespan — the completion time of the
+last operation across all jobs and machines.
+
+ENCODING: PERMUTATION OF OPERATION IDS
+---------------------------------------
+The solution is a permutation (ordering) of operation IDs [0, 1, ..., N*M-1].
+Each operation ID encodes a specific (job, machine) pair:
+
+  job_id   = op // M
+  mach_id  = op % M
+
+The decoder is a greedy list scheduler: it processes operations in the
+order of the permutation and starts each operation as soon as both its
+assigned job and machine are free.
+
+  job_avail[job_id] = max completion time among jobs processed so far
+  mach_avail[mach_id] = max completion time on this machine so far
+  start_time = max(job_avail[job_id], mach_avail[mach_id])
+  end_time   = start_time + processing_time[job_id, mach_id]
+
+Validation: the sequence must contain exactly one of each operation ID
+(a permutation of [0 .. N*M-1]).
+
+ENV_DATA KEYS
+-------------
+  - num_jobs (int): number of jobs N
+  - num_machines (int): number of machines M
+  - total_ops (int): N * M
+  - ossp_times (np.ndarray shape (N, M)): ossp_times[j, m] = processing time
+    of job j on machine m
+  - upper_bound (float): best known upper bound (BKS)
+  - lower_bound (float): best known lower bound
+
+HEURISTIC DESIGN HINTS
+-----------------------
+1. Critical path: In OSSP, the critical path often involves the job or
+   machine with the largest total processing time. Prioritise operations
+   belonging to bottleneck jobs/machines.
+2. Greedy ECT (Earliest Completion Time): At each step, select the
+   operation that would finish earliest given current job/machine
+   availability. This is a well-known constructive heuristic.
+3. Insertion-based local search: Removing an operation from the sequence
+   and re-inserting it at the best position often yields large improvements.
+4. Bottleneck sequencing: Operations on the bottleneck machine (highest
+   total load) should be spaced to avoid idle time.
+5. Swap vs insert neighborhood: Swap moves preserve the set of operations
+   between positions. Insert moves can fundamentally reorder the schedule.
+
+SLOT SIGNATURES
+---------------
+All slot functions must follow this signature:
+  def run(env_data, state, calc_makespan_fn):
+      ...
+      return state
+
+  - env_data: one instance returned by load_instance_group(group)
+  - state: SolutionState with .sequence (np.array), .makespan (float),
+    .metadata (dict)
+  - calc_makespan_fn: callable that takes (sequence, env_data) and returns
+    float makespan
+
+The state.sequence must be a numpy array containing a valid permutation
+of [0, 1, ..., N*M-1].
+
+[OPERATOR CONTRACT]
+- Always call `calc_makespan_fn(candidate_or_state, env_data)` in that order.
+- A committed candidate must update both `state.sequence` and `state.makespan`.
+- Initialization returns a legal permutation; local search commits only a real improvement.
+- Perturbation must produce a different legal permutation when one exists, even if temporarily worse.
+- Acceptance compares against `metadata['prev_makespan']` and restores `prev_sequence` when rejected.

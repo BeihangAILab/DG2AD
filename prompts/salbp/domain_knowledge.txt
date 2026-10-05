@@ -1,0 +1,100 @@
+Simple Assembly Line Balancing Problem Type 1 (SALBP-1) Domain Knowledge
+======================================================================
+
+PROBLEM DEFINITION
+------------------
+Given N tasks, each with a processing time t[j], a set of precedence
+constraints between tasks, and a fixed cycle time C, the goal is to
+assign all tasks to the **minimum number** of sequential workstations
+such that:
+
+  1. The sum of processing times at each station does NOT exceed the
+     cycle time C.
+  2. Precedence constraints are respected: if task u must precede
+     task v, then station(u) <= station(v) (v cannot be assigned to
+     an earlier station than u).
+  3. Every task must be assigned to exactly one station.
+  4. Tasks within a station are executed sequentially; stations work
+     in parallel (pipeline).
+
+This is the Type-1 variant (SALBP-1): minimise the number of stations
+for a given cycle time.
+
+ENCODING: TOPOLOGICAL PERMUTATION
+----------------------------------
+The solution is a topological ordering (permutation) of task IDs
+[0, 1, ..., N-1] that respects ALL precedence constraints.
+
+Precedence constraint: if task u must precede task v, then u MUST
+appear before v in the sequence.
+
+DECODER: GREEDY FIRST-FIT STATION ASSIGNMENT
+---------------------------------------------
+The decoder processes tasks in the given sequence order:
+  1. Determine min_station = max(station of each predecessor of this task)
+  2. Find the first station s >= min_station where adding this task
+     does not exceed the cycle time C.
+  3. If no existing station can take the task, open a new one.
+
+The number of stations used is the makespan (objective to minimise).
+
+OBJECTIVE: MINIMISE NUMBER OF STATIONS
+--------------------------------------
+makespan = number of workstations used. Lower is better.
+
+Since no BKS (best-known solution) data is available for these instances,
+the upper_bound is set to the theoretical lower bound:
+  LB = ceil(sum of all task times / cycle time)
+
+The GAP = (makespan - LB) / LB * 100 represents how far above the
+theoretical minimum the solution is.
+
+ENV_DATA KEYS
+-------------
+  - num_tasks (int): number of tasks N
+  - cycle_time (int): maximum allowed time per workstation
+  - times (np.array shape (N,)): processing time of each task
+  - adj_matrix (np.array shape (N, N), bool): adjacency matrix of
+    precedence graph (adj[i,j]=True means i must precede j)
+  - edges (np.array shape (E, 2)): edge list of precedence constraints
+  - upper_bound (float): theoretical lower bound (ceil(total/C))
+  - total_time (float): sum of all task processing times
+
+HEURISTIC DESIGN HINTS
+-----------------------
+1. Topological validity is ESSENTIAL: any sequence that violates
+   precedence constraints will be rejected (penalty value).
+2. Largest task time first: assigning tasks with long processing times
+   early fills stations efficiently.
+3. Largest number of successors first: tasks that unblock many other
+   tasks should be scheduled earlier.
+4. Positional weight (PW): the sum of a task's time plus all its
+   successors' times. Tasks with higher PW are on longer chains.
+5. Station-oriented moves: directly manipulating station assignments
+   (moving a task from one station to another) may be more effective
+   than swapping in the sequence.
+6. Load balancing: after station assignment, try to redistribute tasks
+   to reduce the number of stations.
+
+SLOT SIGNATURES
+---------------
+All slot functions must follow this signature:
+  def run(env_data, state, calc_makespan_fn):
+      ...
+      return state
+
+  - env_data: one instance returned by load_instance_group(group)
+  - state: SolutionState with .sequence (np.array of int32),
+    .makespan (float), .metadata (dict)
+  - calc_makespan_fn: callable that takes (sequence, env_data)
+    and returns float number of stations
+
+The state.sequence must be a numpy int32 array containing a valid
+topological permutation of [0, 1, ..., N-1].
+
+[OPERATOR CONTRACT]
+- Always call `calc_makespan_fn(candidate_or_state, env_data)` in that order.
+- A committed candidate must update both `state.sequence` and `state.makespan`.
+- Initialization and every move must preserve precedence feasibility.
+- Local search commits only a real improvement; perturbation produces a different legal order when one exists.
+- Acceptance compares against `metadata['prev_makespan']` and restores `prev_sequence` when rejected.

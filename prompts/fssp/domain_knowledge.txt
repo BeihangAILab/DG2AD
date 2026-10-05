@@ -1,0 +1,68 @@
+The directed operator graph uses these functions to search the Flow Shop Scheduling Problem (FSSP) solution space and minimize makespan (Cmax).
+
+[CRITICAL WARNING ABOUT ENVIRONMENT DATA]
+The passed `env_data` is a dictionary. You CAN and MUST ONLY use these core keys:
+  `'num_jobs'`          — int, number of jobs
+  `'num_machines'`      — int, number of machines
+  `'processing_times'`  — np.ndarray of shape (num_machines, num_jobs)
+                          entry [m, j] = processing time of job j on machine m
+  `'total_ops'`         — int, total number of operations = num_jobs * num_machines
+
+Absolutely DO NOT invent or call any other environment keys, otherwise a KeyError will crash the dictionary reading.
+
+[DATA STRUCTURE]
+The solution is a single permutation-based encoding:
+  - state.sequence: a 1D numpy array of length num_jobs * num_machines.
+    Each job j appears exactly num_machines times.
+    The k-th occurrence of job j in the sequence represents job j's operation on machine k
+    (machines are numbered 0 through num_machines-1 in fixed order).
+
+Example: for 3 jobs and 2 machines, a valid sequence could be [1, 2, 0, 1, 0, 2].
+  - Job 0 appears at positions 2 and 4: operation on machine 0 (pos 2), machine 1 (pos 4)
+  - Job 1 appears at positions 0 and 3: operation on machine 0 (pos 0), machine 1 (pos 3)
+  - Job 2 appears at positions 1 and 5: operation on machine 0 (pos 1), machine 1 (pos 5)
+
+To evaluate a sequence, call:
+    calc_makespan_fn(state, env_data)
+This internally extracts state.sequence, simulates the permutation flow shop schedule,
+and returns the makespan (Cmax).
+
+[EVALUATION FUNCTION]
+The calc_makespan_fn(state, env_data) simulates the schedule chronologically:
+  - Scans the sequence left to right.
+  - For each job_id at position pos, determines its current machine m (0-indexed)
+    by counting how many times job_id has appeared so far.
+  - Schedules the operation at start_time = max(machine_available[m], job_ready[job_id]).
+  - If machine m is >= num_machines (too many repetitions), returns 999999999 (invalid).
+  - Updates machine_available[m] and job_ready[job_id] to the end_time.
+  - Returns the maximum completion time across all machines.
+
+[CONSTRAINTS]
+  - The sequence array MUST have length == num_jobs * num_machines.
+  - Each job j MUST appear exactly num_machines times.
+  - Job IDs MUST be in range [0, num_jobs-1].
+  - Processing times are read from processing_times[machine_id, job_id].
+
+[SLOT FUNCTION SIGNATURE]
+Every slot function must have the signature:
+    def run(env_data, state, calc_makespan_fn):
+        # ... modify state.sequence ...
+        # call calc_makespan_fn(state, env_data) to evaluate
+        return state
+
+[HINTS FOR HEURISTIC DESIGN]
+  - The NEH heuristic (Nawaz-Enscore-Ham) is the strongest constructive method for FSSP.
+    Sort jobs by descending total processing time, then greedily insert each job into
+    the best position relative to the current partial schedule.
+  - Local search can use insertion moves (remove a job and re-insert at another position)
+    or swap moves (exchange two positions in the permutation).
+  - The sequence is an "operation-based" encoding — modifying the permutation changes
+    the order in which jobs flow through all machines.
+  - Critical path analysis can identify bottleneck machines and jobs for targeted moves.
+
+[OPERATOR CONTRACT]
+- Always call `calc_makespan_fn(candidate_or_state, env_data)` in that order.
+- A committed candidate must update both `state.sequence` and `state.makespan`.
+- Initialization returns the exact required job multiset; local search commits only a real improvement.
+- Mutation must produce a different legal sequence when distinct jobs exist and may be temporarily worse.
+- Acceptance compares against `metadata['prev_makespan']` and restores `prev_sequence` when rejected.

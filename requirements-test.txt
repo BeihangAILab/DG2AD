@@ -1,0 +1,6 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+-r requirements-smoke.txt
+numba==0.63.1
+torch==2.5.1+cpu
+ruff==0.15.20

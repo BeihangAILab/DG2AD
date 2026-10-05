@@ -1,0 +1,83 @@
+The directed operator graph searches the Maximum Independent Set (MIS) solution space and seeks the largest set of mutually non-adjacent vertices.
+
+Bundled `.clq` files are DIMACS maximum-clique benchmarks. The evaluator exposes
+their complement graph through `adj`, so an independent set found here is exactly
+a clique in the source instance and can be compared with `mis_bks.json`.
+
+[CRITICAL WARNING ABOUT ENVIRONMENT DATA]
+The passed `env_data` is a dictionary. You CAN and MUST ONLY use these core keys:
+  `'num_vertices'`  — int, number of vertices |V| (also available as `'total_vertices'`)
+  `'adj'`           — list of set, adj[i] = set of neighbor IDs of vertex i (0-indexed)
+  `'name'`          — str, instance name
+
+Absolutely DO NOT invent or call any other environment keys.
+
+[DATA STRUCTURE]
+The solution is a binary vector of length num_vertices:
+  - state.sequence: numpy int32 array, length N.
+    sequence[i] = 1  means vertex i IS in the independent set
+    sequence[i] = 0  means vertex i is NOT in the set
+
+[FEASIBILITY CONSTRAINT]
+For ANY two vertices u, v in the independent set (sequence[u] = 1 and sequence[v] = 1),
+they MUST NOT be adjacent: v NOT IN adj[u] and u NOT IN adj[v].
+If any adjacent pair both have value 1, the solution is INFEASIBLE and calc_makespan_fn
+returns the domain's large positive INVALID_SCORE penalty.
+
+[EVALUATION FUNCTION]
+calc_makespan_fn(state, env_data):
+  - Counts the number of vertices with value 1 (= independent set size).
+  - Checks feasibility by verifying no edge connects any two vertices in the set.
+  - Returns ** -size ** (negative, so larger sets → more negative = "better" for the minimisation engine).
+  - Infeasible or malformed solutions return INVALID_SCORE (a large positive penalty).
+
+[SIZE-QUALITY RELATIONSHIP]
+  - size = 0 (empty set): score = 0.0 (worst valid)
+  - size = |V| (all vertices): score = -|V| (best possible, but usually infeasible on dense graphs)
+  - A larger independent set is ALWAYS better.
+
+[SLOT FUNCTION SIGNATURE]
+Every slot function must have the signature:
+    def run(env_data, state, calc_makespan_fn):
+        # ... modify state.sequence ...
+        # call calc_makespan_fn(state, env_data) to evaluate
+        return state
+
+[HINTS FOR HEURISTIC DESIGN]
+  - Greedy construction: sort vertices by degree (ascending). For each vertex in order,
+    if none of its neighbors is already in the set, add it. Randomising vertex order
+    before sorting by degree adds diversity.
+  - Perturbation: flip a random subset of bits, then apply a repair operator to restore
+    feasibility (resolve conflicts by removing the higher-degree vertex).
+  - Local search moves:
+    * (0,1)-swap: try adding a vertex that has no neighbors in the current set.
+    * (1,0)-swap: remove a vertex, then try to add multiple of its non-neighbors
+      (which become unblocked after removal).
+    * (1,1)-swap: replace vertex u with vertex v where v is not adjacent to any set
+      member except u.
+  - The complement graph property: an independent set in G is a clique in the complement
+    of G.  Algorithms can be designed on either representation.
+  - Tabu search and simulated annealing with degree-based or cardinality-based move
+    selection are effective metaheuristics.
+  - For very large instances, consider focusing perturbation on vertices in or adjacent
+    to the current independent set (rather than the whole graph).
+
+[OPERATOR CONTRACT]
+- Always call `calc_makespan_fn(candidate_or_state, env_data)` in that order.
+- The sequence must be a binary vector of length `num_vertices` and remain an independent set.
+- A committed candidate must update both `state.sequence` and `state.makespan`.
+- Local search commits only a real improvement; perturbation must change a legal vector when possible.
+- Acceptance compares against `metadata['prev_makespan']` and restores `prev_sequence` when rejected.
+
+[V-LEVEL OPERATOR ROLES]
+- V=4 is the seed pipeline: greedy initialization, legal bit-flip/repair perturbation,
+  cardinality-improving local search, and simulated-annealing acceptance.
+- V=8 adds randomized greedy construction, 1-to-2 exchange, remove-and-rebuild,
+  and bounded tabu intensification.
+- V=15 adds dynamic-degree construction, add/drop and plateau-assisted improvement,
+  conflict/neighborhood destruction, random-walk diversification, and VNS.
+- V=20 adds multi-start construction, partial restart, ruin-and-recreate,
+  elite/current feasible crossover, and iterated greedy.
+- Initialization must reset best/previous metadata. Local search and intensification
+  may commit only strict improvements. Perturbation, diversification, ruin, and
+  crossover must preserve feasibility and change the vector whenever a legal move exists.

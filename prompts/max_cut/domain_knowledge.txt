@@ -1,0 +1,46 @@
+The directed operator graph searches the Maximum Cut (Max-Cut) solution space and maximizes the total weight crossing between two vertex partitions.
+
+[CRITICAL WARNING ABOUT ENVIRONMENT DATA]
+The passed `env_data` is a dictionary. You CAN and MUST ONLY use these core keys:
+  `'num_nodes'`     — int, number of nodes in the graph
+  `'num_edges'`     — int, number of edges in the graph
+  `'neighbors'`     — numpy int32 array, neighbors list in CSR format
+  `'edge_weights'`   — numpy float32 array, weights list in CSR format
+  `'offsets'`       — numpy int32 array, row offsets in CSR format
+
+Absolutely DO NOT invent or call any other environment keys.
+
+[DATA STRUCTURE]
+The solution is represented as a binary partition assignment vector of length num_nodes:
+  - state.sequence: a list or numpy array of length num_nodes.
+    sequence[i] = 0 or 1 represents which partition set vertex i belongs to.
+
+[EVALUATION FUNCTION]
+calc_makespan_fn(state.sequence, env_data):
+  - Calculates the total weight of edges that cross between partition 0 and partition 1.
+  - Returns the NEGATIVE of the total cut weight (e.g. -weight) so that maximizing the cut weight corresponds to minimizing the returned makespan value.
+  - A lower makespan value is always better.
+
+[SLOT FUNCTION SIGNATURE]
+Every slot function must have the signature:
+    def run(env_data, state, calc_makespan_fn):
+        # ... modify state.sequence ...
+        # call calc_makespan_fn(state.sequence, env_data) to evaluate
+        return state
+
+[HINTS FOR HEURISTIC DESIGN]
+  - Greedy construction: Initialize all nodes to 0 or 1 randomly, or place each node sequentially in the partition that maximizes the weight of edges connecting it to the opposite partition.
+  - Local search: Perform a single-node flip local search. The JIT-accelerated utility function `get_flip_delta` can be imported from `src.problems.max_cut.domain_evaluator` to quickly compute the change in cut weight when node `i` is flipped:
+      `from src.problems.max_cut.domain_evaluator import get_flip_delta`
+      `delta = get_flip_delta(node_idx, sequence, neighbors, weights, offsets)`
+    If `delta > 0`, flipping node `i` increases the cut weight (and decreases the negative makespan), so you should flip the node assignment: `sequence[i] = 1 - sequence[i]`.
+  - Perturbation: Randomly flip the assignment of a small percentage of nodes to escape local optima.
+  - Simulated Annealing or Tabu Search can be used during acceptance/intensification by maintaining the best sequence and rolling back if moves degrade the cut weight beyond the temperature threshold.
+
+[OPERATOR CONTRACT]
+- Always call `calc_makespan_fn(candidate_or_state, env_data)` in that order.
+- The sequence must be a binary vector of length `num_nodes`.
+- A committed candidate must update both `state.sequence` and `state.makespan`.
+- Local search commits only a real cut-weight improvement; perturbation must flip at least one node on a non-empty graph.
+- Acceptance compares against `metadata['prev_makespan']` and restores `prev_sequence` when rejected.
+- `upper_bound` is the negative, traceable G-set best-known cut from `instances/gset_bks.json`; never invent a fallback GAP reference.

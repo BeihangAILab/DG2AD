@@ -1,0 +1,82 @@
+The directed operator graph uses these functions to search the Job-Shop Scheduling Problem (JSP) solution space and minimize makespan (Cmax).
+
+[CRITICAL WARNING ABOUT ENVIRONMENT DATA]
+The passed `env_data` is a dictionary. You CAN and MUST ONLY use these core keys:
+  `'num_jobs'`          — int, number of jobs
+  `'num_machines'`      — int, number of machines
+  `'machines_matrix'`   — np.ndarray of shape (num_jobs, num_machines)
+                          entry [j, o] = machine ID assigned to job j's operation o (0-indexed)
+  `'times_matrix'`      — np.ndarray of shape (num_jobs, num_machines)
+                          entry [j, o] = processing time of job j's operation o
+  `'total_ops'`         — int, total number of operations = num_jobs * num_machines
+
+Absolutely DO NOT invent or call any other environment keys. A KeyError will crash execution.
+
+[DATA STRUCTURE]
+The solution uses an operation-based representation:
+  - state.sequence: a 1D array of length num_jobs * num_machines.
+  - Each job j appears exactly num_machines times in the sequence.
+  - The k-th occurrence of job j represents its k-th operation.
+  - The machine for job j's operation k is machines_matrix[j][k].
+  - The processing time is times_matrix[j][k].
+
+Example: 2 jobs, 2 machines.
+  machines_matrix = [[1, 0], [0, 1]]   # job 0: op0 on M1, op1 on M0; job 1: op0 on M0, op1 on M1
+  times_matrix    = [[5, 3], [4, 6]]
+  A valid sequence: [0, 1, 1, 0]
+    Position 0: job 0, op 0 → machine 1, time 5
+    Position 1: job 1, op 0 → machine 0, time 4
+    Position 2: job 1, op 1 → machine 1, time 6
+    Position 3: job 0, op 1 → machine 0, time 3
+
+To evaluate a sequence, call:
+    calc_makespan_fn(state, env_data)
+This extracts state.sequence, simulates the job-shop schedule, and returns the makespan.
+
+[EVALUATION FUNCTION]
+The schedule simulator processes the sequence left-to-right:
+  - For each job_id, counts how many times this job has appeared → determines the current operation index.
+  - Reads machine = machines_matrix[job_id][op_idx] and time = times_matrix[job_id][op_idx].
+  - Schedules the operation at start = max(job_ready[job_id], machine_available[machine]).
+  - Updates both availability arrays.
+  - Returns max(machine_available) = Cmax (makespan).
+
+[CONSTRAINTS]
+  - The sequence MUST have length == num_jobs * num_machines.
+  - Each job j MUST appear exactly num_machines times.
+  - Job IDs MUST be in range [0, num_jobs-1].
+  - Violating any constraint returns makespan = 999999999.
+
+[SLOT FUNCTION SIGNATURE]
+Every slot function must have the signature:
+    def run(env_data, state, calc_makespan_fn):
+        # ... modify state.sequence ...
+        # call calc_makespan_fn(state, env_data) to evaluate
+        return state
+
+[HINTS FOR HEURISTIC DESIGN]
+  - The disjunctive graph is the fundamental JSP model: nodes = operations,
+    conjunctive arcs = precedence within each job, disjunctive arcs = pairs of
+    operations competing for the same machine.
+  - The critical path is the longest path from source to sink in the schedule;
+    its length equals Cmax.  Operations on the critical path are the only
+    operations whose delay would increase Cmax — local search should target them.
+  - Effective neighbourhoods:
+    * N1 (Van Laarhoven): swap two adjacent critical operations on the same machine.
+    * N5 (Nowicki-Smuntnicki): reverse the order of a block of 2-3 consecutive
+      critical operations on the same machine.
+    * Insertion (shift-to-left): remove a critical operation and re-insert it
+      into a better position.
+  - Tabu search and simulated annealing with critical-path-guided moves are the
+    classic metaheuristic approaches.
+  - Simple dispatching rules for initialisation: SPT (shortest processing time),
+    MWKR (most work remaining), EDD (earliest due date), ECT (earliest completion time).
+  - The NEH heuristic (originally for FSSP) can be adapted: sort jobs by total
+    processing time, then greedily insert each job's operations.
+
+[OPERATOR CONTRACT]
+- Always call `calc_makespan_fn(candidate_or_state, env_data)` in that order.
+- A committed candidate must update both `state.sequence` and `state.makespan`.
+- Initialization returns the exact required job multiset; local search commits only a real improvement.
+- Perturbation must change the legal sequence when distinct jobs exist and may be temporarily worse.
+- Acceptance compares against `metadata['prev_makespan']` and restores `prev_sequence` when rejected.
