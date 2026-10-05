@@ -6,22 +6,22 @@
 
 ## Table of Contents
 
-* 1\. [News 📰](#News)
-* 2\. [Introduction 🚀](#Introduction)
-* 3\. [Exciting Highlights 🌟](#ExcitingHighlights)
-* 4\. [Usage 🔑](#Usage)
-  * 4.1. [Installation](#Dependency)
-  * 4.2. [To run DGA2D](#TorunDGA2D)
-  * 4.3. [Available problems](#Availableproblems)
-  * 4.4. [Simple steps to apply DGA2D to your problem](#SimplestepstoapplyDGA2Dtoyourproblem)
-  * 4.5. [Use Alternative LLMs](#UseAlternativeLLMs)
-* 5\. [Citation 🤩](#Citation)
+* 1\. [News 📰](#1-news-)
+* 2\. [Introduction 🚀](#2-introduction-)
+* 3\. [Exciting Highlights 🌟](#3-exciting-highlights-)
+* 4\. [Usage 🔑](#4-usage-)
+  * 4.1. [Installation](#41-installation)
+  * 4.2. [To run DGA2D](#42-to-run-dga2d)
+  * 4.3. [Available problems](#43-available-problems)
+  * 4.4. [Simple steps to apply DGA2D to your problem](#44-simple-steps-to-apply-dga2d-to-your-problem)
+  * 4.5. [Use Alternative LLMs](#45-use-alternative-llms)
+* 5\. [Citation 🤩](#5-citation-)
 
-## 1. <a name="News"></a> News 📰
+## 1. News 📰
 
 - **Aug. 2026:** Our paper is available on [arXiv](https://arxiv.org/abs/2608.00700).
 
-## 2. <a name="Introduction"></a> Introduction 🚀
+## 2. Introduction 🚀
 
 ![Overview of the DGA2D framework](./assets/framework.png)
 
@@ -31,7 +31,7 @@ DGA2D **jointly evolves operator implementations and graph connectivity**. A **f
 
 The current engine samples constrained graph walks with a local LoRA policy and updates it using REINFORCE. Markov credit guides implementation selection and evolution, while all generations use a fixed evolution batch of shared training instances. The provided experiment presets include credit ablation, and the offline smoke test checks execution without API calls or model downloads.
 
-## 3. <a name="ExcitingHighlights"></a> Exciting Highlights 🌟
+## 3. Exciting Highlights 🌟
 
 DGA2D enables:
 
@@ -46,13 +46,13 @@ across four categories of combinatorial optimization problems:
 - Spatial allocation
 - Graph optimization
 
-## 4. <a name="Usage"></a> Usage 🔑
+## 4. Usage 🔑
 
 - Configure the proposer in `.env` using your API key, endpoint, and model name.
 - Prepare benchmark data following [DATASETS.md](./DATASETS.md).
 - Running logs, generated operators, checkpoints, and results are saved in `runs/<problem>/<timestamp>/`.
 
-#### 4.1. <a name="Dependency"></a> Installation
+#### 4.1. Installation
 
 Full runs use **Python 3.13**, an **NVIDIA CUDA GPU**, and the provided **PyTorch 2.6.0 / CUDA 12.6** dependency lock. From the repository root, create the environment and install dependencies:
 
@@ -65,7 +65,7 @@ If `.venv` already uses a different Python version, move it aside before creatin
 
 On Linux, create the environment with `python3.13 -m venv .venv` and use `.venv/bin/python` in place of `.\.venv\Scripts\python.exe` in the commands below.
 
-#### 4.2. <a name="TorunDGA2D"></a> To run DGA2D
+#### 4.2. To run DGA2D
 
 For a minimal offline check, run:
 
@@ -104,7 +104,7 @@ Then start DGA2D:
 
 Check out [cfg/config.yaml](./cfg/config.yaml) for more options. The default problem is `3dclp`; this example explicitly selects `fssp`.
 
-#### 4.3. <a name="Availableproblems"></a> Available problems
+#### 4.3. Available problems
 
 - Job-Shop Scheduling (JSP): `jsp`
 - Flexible Job-Shop Scheduling (FJSP): `fjsp`
@@ -119,13 +119,13 @@ Check out [cfg/config.yaml](./cfg/config.yaml) for more options. The default pro
 - Maximum Independent Set (MIS): `mis`
 - Maximum Cut (Max-Cut): `max_cut`
 
-#### 4.4. <a name="SimplestepstoapplyDGA2Dtoyourproblem"></a> Simple steps to apply DGA2D to your problem
+#### 4.4. Simple steps to apply DGA2D to your problem
 
 - Define the problem and target benchmark group in `cfg/problem/`.
 - Implement the domain evaluator and initial operator slots in `src/problems/<problem>/`, following the existing FSSP example. Each operator exposes `run(env_data, state, calc_makespan_fn)`.
 - Add domain knowledge in `prompts/<problem>/`, prepare the benchmark data, and run `main.py problem=<problem>`.
 
-#### 4.5. <a name="UseAlternativeLLMs"></a> Use Alternative LLMs
+#### 4.5. Use Alternative LLMs
 
 Use `llm=openai_compatible` with the `LLM_*` settings above for an OpenAI-compatible proposer service. Two additional configurations are provided:
 
@@ -143,7 +143,7 @@ Override endpoint and model identifiers with `DEEPSEEK_BASE_URL` / `DEEPSEEK_MOD
 
 The **pipeline policy** is separate from the proposer: it runs locally with LoRA, defaults to `Qwen/Qwen2.5-0.5B-Instruct`, and is configured through `policy.*`.
 
-## 5. <a name="Citation"></a> Citation 🤩
+## 5. Citation 🤩
 
 If you find our work helpful, please consider citing our paper:
 

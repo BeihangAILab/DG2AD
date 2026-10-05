@@ -21,9 +21,9 @@
       "sha256": "c781397b0c1526ed32d387ddc7e6f4798b9027b1aaad59f6f03c932f70301a03"
     },
     {
-      "bytes": 7587,
+      "bytes": 7314,
       "path": "README.md",
-      "sha256": "38eec5477363deec4236efadba7244e48ae1626157cd527543cc12f4aa3a85e7"
+      "sha256": "b0f51ab0d8e23404b46d9e44da24eec6c0f126325ad34c33e7cac1386996944d"
     },
     {
       "bytes": 1907316,
@@ -281,9 +281,9 @@
       "sha256": "b6d55bcdcf0864dfec7ccc9bbe1f4b567ce21586b237d5f409cc73cb85dd8893"
     },
     {
-      "bytes": 127,
+      "bytes": 180,
       "path": "requirements-test-py313.txt",
-      "sha256": "888ebb5ec2bd7225b43f3cfc1028f045606025358f29f476c4eb27268b469533"
+      "sha256": "d183d067d60bb42584ac29a3ac7e9b6a06a2c8baf414a38f598381fa25fb1284"
     },
     {
       "bytes": 133,
