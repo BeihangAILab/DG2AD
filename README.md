@@ -148,13 +148,10 @@ The **pipeline policy** is separate from the proposer: it runs locally with LoRA
 If you find our work helpful, please consider citing our paper:
 
 ```bibtex
-@misc{zhao2026dga2d,
-  title         = {{DGA2D}: Directed Graph-Guided Automated Algorithm Design with Large Language Models},
-  author        = {Zhao, Jiale and Chen, Zimu and Mao, Sirui and Yang, Wentao and Bai, Yuxiang and Lai, Liyuanjun},
-  year          = {2026},
-  eprint        = {2608.00700},
-  archivePrefix = {arXiv},
-  primaryClass  = {cs.AI},
-  url           = {https://arxiv.org/abs/2608.00700}
+@article{zhao2026dga,
+  title={DGA $ \_2 $ D: Directed Graph-Guided Automated Algorithm Design with Large Language Models},
+  author={Zhao, Jiale and Chen, Zimu and Mao, Sirui and Yang, Wentao and Bai, Yuxiang and Lai, Liyuanjun},
+  journal={arXiv preprint arXiv:2608.00700},
+  year={2026}
 }
 ```
