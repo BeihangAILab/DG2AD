@@ -31,6 +31,10 @@ DGA2D **jointly evolves operator implementations and graph connectivity**. A **f
 
 The current engine samples constrained graph walks with a local LoRA policy and updates it using REINFORCE. Markov credit guides implementation selection and evolution, while all generations use a fixed evolution batch of shared training instances. The provided experiment presets include credit ablation, and the offline smoke test checks execution without API calls or model downloads.
 
+The following figure shows the evolution of DGA2D on CVRP over 50 epochs. The best-so-far optimality gap decreases from 5.20% to 0.42%, with rapid early improvement, continued refinement in the middle stage, and stable convergence in the late stage.
+
+![Figure 4: Stage-wise convergence of DGA2D on CVRP](./assets/cvrp_evolution.png)
+
 ## 3. Exciting Highlights 🌟
 
 DGA2D enables:
