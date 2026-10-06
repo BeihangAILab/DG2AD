@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from collections import deque
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable
 
 from .configuration import cfg_get
-from .contracts import GraphDelta
+from .contracts import GraphDelta, parse_graph_edges
 from .operators import discover_operator_versions
 
 
@@ -182,6 +183,18 @@ class DirectedOperatorGraph:
             return None
         route = prefix + [target] + suffix[1:]
         return [node for node in route if node not in (START, END)]
+
+    def bounded_route_count(self, max_length: int) -> int:
+        """Count terminating walks, including cycles within the operator bound."""
+        adjacency = self.adjacency()
+        previous = {node: int(END in targets) for node, targets in adjacency.items()}
+        for _ in range(max_length):
+            previous = {
+                node: int(END in targets)
+                + sum(previous[target] for target in targets if target != END)
+                for node, targets in adjacency.items()
+            }
+        return previous[START]
 
     def route_through_node(self, node: str) -> list[str] | None:
         prefix = self.shortest_path(START, node)
@@ -421,7 +434,9 @@ class PaperInitializer:
             "Return JSON only with keys H, operators, entry_nodes, exit_nodes, edges. "
             "H has max_operator_count, max_pipeline_length, sampling_temperature. "
             "Operators and every edge endpoint must use the exact IDs below. START and "
-            "END are implicit and must not be placed in operators. Entry nodes must be "
+            "END are implicit and must not be placed in operators. Encode edges as "
+            '[["source_operator_id", "target_operator_id"]]; use __START__ and __END__ '
+            "for sentinel endpoints if included. Entry nodes must be "
             "initialization operators; an entry may not be revisited later. "
             f"STRUCTURE MODE: {self.mode.upper()}. {structure_rule} "
             "Exit nodes must be able to terminate a valid "
@@ -467,7 +482,7 @@ class PaperInitializer:
             raise ValueError("Invalid entry/exit node declaration")
         if any(not node.startswith("initialization|") for node in entries):
             raise ValueError("START may only enter initialization operators")
-        edges = {tuple(map(str, edge)) for edge in raw.get("edges", [])}
+        edges = set(parse_graph_edges(raw.get("edges", [])))
         edges |= {(START, node) for node in entries}
         edges |= {(node, END) for node in exits}
         graph = DirectedOperatorGraph(nodes, edges, entries, exits)
@@ -488,13 +503,18 @@ class PaperInitializer:
             return self._predefined()
         retries = int(cfg_get(self.config, "initialization.retries", 2))
         last_raw = None
-        for _ in range(retries + 1):
+        for attempt in range(retries + 1):
             try:
                 content, _tokens = self.llm.chat([{"role": "user", "content": self._prompt()}])
                 last_raw = _json_object(content)
                 return self._parse(last_raw)
-            except Exception:
+            except Exception as exc:
+                logging.getLogger(__name__).warning(
+                    "Initialization attempt %d rejected: %s: %s",
+                    attempt + 1, type(exc).__name__, str(exc),
+                )
                 continue
+        logging.getLogger(__name__).warning("Initialization exhausted attempts; using baseline fallback")
         return self._fallback(last_raw)
 
 

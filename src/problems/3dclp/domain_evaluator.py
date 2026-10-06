@@ -181,6 +181,9 @@ def _single_container_pack(
 
     total_placed = 0
     packed_volume = 0
+    # Maintain unique usable EPs in the original (z, y, x) order.
+    # Duplicate coordinates cannot change the first feasible placement.
+    points = [(0, 0, 0)]
 
     for act_idx in range(len(priority_list)):
         act = priority_list[act_idx]
@@ -198,59 +201,12 @@ def _single_container_pack(
             (di, hi, wi),
         ]
 
-        # Gather Extreme Points from placed items + origin
-        ep_x = [0]
-        ep_y = [0]
-        ep_z = [0]
-        for j in range(total_placed):
-            if placed_flag[j] == 1:
-                xj = placed_x[j]
-                yj = placed_y[j]
-                zj = placed_z[j]
-                wj = placed_w[j]
-                hj = placed_h[j]
-                dj = placed_d[j]
-                ep_x.append(xj + wj)
-                ep_y.append(yj)
-                ep_z.append(zj)
-                ep_x.append(xj)
-                ep_y.append(yj + hj)
-                ep_z.append(zj)
-                ep_x.append(xj)
-                ep_y.append(yj)
-                ep_z.append(zj + dj)
-
-        # Sort EP points by z, then y, then x (BLF order) -- bubble sort for numba
-        num_eps = len(ep_x)
-        for step in range(num_eps):
-            for idx in range(num_eps - step - 1):
-                swap_flag = False
-                if ep_z[idx] > ep_z[idx + 1]:
-                    swap_flag = True
-                elif ep_z[idx] == ep_z[idx + 1]:
-                    if ep_y[idx] > ep_y[idx + 1]:
-                        swap_flag = True
-                    elif ep_y[idx] == ep_y[idx + 1]:
-                        if ep_x[idx] > ep_x[idx + 1]:
-                            swap_flag = True
-
-                if swap_flag:
-                    tx = ep_x[idx]
-                    ep_x[idx] = ep_x[idx + 1]
-                    ep_x[idx + 1] = tx
-                    ty = ep_y[idx]
-                    ep_y[idx] = ep_y[idx + 1]
-                    ep_y[idx + 1] = ty
-                    tz = ep_z[idx]
-                    ep_z[idx] = ep_z[idx + 1]
-                    ep_z[idx + 1] = tz
+        num_eps = len(points)
 
         # Try each EP point with each rotation
         placed_ok = False
         for idx in range(num_eps):
-            ex = ep_x[idx]
-            ey = ep_y[idx]
-            ez = ep_z[idx]
+            ez, ey, ex = points[idx]
 
             for rot_idx in range(6):
                 # BR C1_* flags specify whether the corresponding original
@@ -304,6 +260,26 @@ def _single_container_pack(
                     total_placed += 1
                     packed_volume += rw * rh * rd
                     placed_ok = True
+                    # An EP inside the newly occupied half-open box can never
+                    # start another positive-size box, in any orientation.
+                    points = [p for p in points if not (
+                        ex <= p[2] < ex + rw and ey <= p[1] < ey + rh
+                        and ez <= p[0] < ez + rd
+                    )]
+                    for point in ((ez, ey, ex + rw), (ez, ey + rh, ex), (ez + rd, ey, ex)):
+                        pz, py, px = point
+                        if px >= W or py >= H or pz >= D:
+                            continue
+                        # Binary insertion preserves BLF ordering exactly.
+                        lo, hi = 0, len(points)
+                        while lo < hi:
+                            mid = (lo + hi) // 2
+                            if points[mid] < point:
+                                lo = mid + 1
+                            else:
+                                hi = mid
+                        if lo == len(points) or points[lo] != point:
+                            points.insert(lo, point)
                     break
 
             if placed_ok:

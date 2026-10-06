@@ -12,6 +12,25 @@ from typing import Any, Iterable, Literal, Protocol, runtime_checkable
 EVALUATION_SCHEMA_VERSION = 2
 
 
+def parse_graph_edges(value: Any) -> list[tuple[str, str]]:
+    """Normalize wire-format edges without relaxing graph validation."""
+    if not isinstance(value, list):
+        raise ValueError("Graph edges must be a list")
+    result = []
+    for edge in value:
+        if isinstance(edge, dict) and set(edge) == {"source", "target"}:
+            pair = [edge["source"], edge["target"]]
+        elif isinstance(edge, (list, tuple)) and len(edge) == 2:
+            pair = edge
+        else:
+            raise ValueError("Each edge requires exactly source and target")
+        if any(not isinstance(node, str) or not node for node in pair):
+            raise ValueError("Edge endpoints must be non-empty strings")
+        aliases = {"START": "__START__", "END": "__END__"}
+        result.append(tuple(aliases.get(node, node) for node in pair))
+    return result
+
+
 @dataclass(frozen=True)
 class RewardSpec:
     """Domain-facing information required by Eq. (7)."""
@@ -44,8 +63,8 @@ class GraphDelta:
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> "GraphDelta":
         return cls(
-            add_edges=[tuple(edge) for edge in value.get("add_edges", [])],
-            delete_edges=[tuple(edge) for edge in value.get("delete_edges", [])],
+            add_edges=parse_graph_edges(value.get("add_edges", [])),
+            delete_edges=parse_graph_edges(value.get("delete_edges", [])),
         )
 
 

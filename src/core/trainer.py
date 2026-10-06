@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import random
+import statistics
 import shutil
 import sys
 import time
@@ -34,6 +36,42 @@ from .structure import (
     configured_structure_mode,
     resolve_fixed_evolution_node,
 )
+
+
+def learning_diagnostics(graph, max_length, results, stats, skipped=False):
+    rewards = [result.raw_reward for result in results]
+    unique = len({result.sample.signature for result in results})
+    routes = graph.bounded_route_count(max_length)
+    finite_rewards = bool(rewards) and all(math.isfinite(value) for value in rewards)
+    variance = statistics.pvariance(rewards) if finite_rewards else None
+    finite = finite_rewards and math.isfinite(stats.loss) and math.isfinite(stats.grad_norm)
+    failures = sum(result.failed for result in results)
+    effective = not skipped and finite and variance > 0 and stats.grad_norm > 0
+    if skipped:
+        reason = "policy_update_disabled"
+    elif not finite:
+        reason = "nonfinite_values"
+    elif failures:
+        reason = "candidate_execution_failure"
+    elif routes == 1:
+        reason = "single_bounded_route"
+    elif unique == 1:
+        reason = "repeated_samples"
+    elif variance == 0:
+        reason = "distinct_pipelines_equal_rewards"
+    elif stats.grad_norm == 0:
+        reason = "zero_gradient"
+    else:
+        reason = "effective_learning"
+    return {
+        "bounded_route_count": routes,
+        "unique_pipeline_count": unique,
+        "reward_variance": variance,
+        "finite": finite,
+        "failed_candidates": failures,
+        "effective_learning": effective,
+        "reason": reason,
+    }
 
 
 def _source_hashes(root: Path) -> dict[str, str]:
@@ -212,8 +250,13 @@ class PaperRLTrainer:
                 standardize=False,
                 evaluation_seed=self.seed,
             )[0]
+            if result.failed:
+                self.reporter.warning(
+                    f"Graph route smoke rejected {route}: {result.failure_reason}"
+                )
             return not result.failed
-        except Exception:
+        except Exception as exc:
+            self.reporter.warning(f"Graph route smoke rejected: {type(exc).__name__}: {exc}")
             return False
 
     def run(self) -> dict[str, Any]:
@@ -340,6 +383,7 @@ class PaperRLTrainer:
                 for route in initial_routes
             )
             if not initial_graph_valid:
+                self.reporter.warning("Initial graph failed smoke execution; using baseline fallback")
                 initialized = initializer._fallback(initialized.llm_response)
                 graph = initialized.graph
                 if pool_dir.exists():
@@ -495,6 +539,11 @@ class PaperRLTrainer:
             )
             policy_elapsed = time.perf_counter() - policy_started
             self.reporter.policy_update(policy_stats, policy_elapsed)
+            diagnostics = learning_diagnostics(
+                graph, initialized.max_pipeline_length, results,
+                policy_stats, policy_update_skipped,
+            )
+            self.reporter.info(f"Learning diagnostics: {json.dumps(diagnostics)}")
             for result in results:
                 credit.update(
                     result.sample.transition_keys,
@@ -508,6 +557,7 @@ class PaperRLTrainer:
                 "policy_loss": policy_stats.loss,
                 "gradient_norm": policy_stats.grad_norm,
                 "policy_update_skipped": policy_update_skipped,
+                "learning_diagnostics": diagnostics,
                 "candidates": [result.to_log_dict() for result in results],
                 "operator_evolution": None,
                 "graph_evolution": None,
@@ -555,11 +605,20 @@ class PaperRLTrainer:
                 )
                 if model is not None:
                     model.train()
-                champion = max(validation_results, key=lambda item: item.raw_reward)
+                champion = max(
+                    (item for item in validation_results
+                     if not item.failed and math.isfinite(item.raw_reward)),
+                    key=lambda item: item.raw_reward,
+                    default=None,
+                )
                 generation_event["validation"] = [
                     result.to_log_dict() for result in validation_results
                 ]
-                is_best = champion.raw_reward > best_validation
+                is_best = champion is not None and champion.raw_reward > best_validation
+                if champion is None:
+                    self.reporter.warning(
+                        "All validation candidates failed; no best checkpoint selected"
+                    )
                 if is_best:
                     best_validation = champion.raw_reward
                     best_metadata = {
@@ -588,7 +647,10 @@ class PaperRLTrainer:
                         )
                 validation_elapsed = time.perf_counter() - validation_started
                 generation_event["timing"]["validation_seconds"] = validation_elapsed
-                self.reporter.validation(champion.raw_reward, is_best, validation_elapsed)
+                self.reporter.validation(
+                    champion.raw_reward if champion is not None else float("-inf"),
+                    is_best, validation_elapsed,
+                )
 
             if generation <= generations:
                 evolution_started = time.perf_counter()
@@ -729,6 +791,10 @@ class PaperRLTrainer:
             evaluation_seed=self.seed + 20_000_000,
         )[0]
         result = {
+            "status": (
+                "validation_failed" if not best_metadata.get("champion_nodes")
+                else "test_failed" if test_result.failed else "completed"
+            ),
             "evaluation_schema_version": EVALUATION_SCHEMA_VERSION,
             "structure": self.structure_mode,
             "seed": self.seed,

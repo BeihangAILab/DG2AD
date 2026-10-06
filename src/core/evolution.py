@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass
 from typing import Callable
@@ -72,7 +73,10 @@ class GraphEvolver:
                 structure_mode=self.structure_mode,
             )
             return candidate, delta
-        except Exception:
+        except Exception as exc:
+            logging.getLogger(__name__).warning(
+                "Graph evolution rejected: %s: %s", type(exc).__name__, str(exc)
+            )
             return graph, None
 
 
@@ -199,6 +203,9 @@ class RuleBasedOperatorEvolver:
             new_version = pool.add_code(weakest, code)
             if combination_validator and not combination_validator(weakest, new_version):
                 pool.version_path(weakest, new_version).unlink(missing_ok=True)
+                logging.getLogger(__name__).warning(
+                    "Operator evolution rejected: combination validation failed for %s", weakest
+                )
                 return None
             limit = int(cfg_get(self.config, "evolution.max_versions_per_node", 10))
             if len(versions) < limit:
@@ -213,5 +220,8 @@ class RuleBasedOperatorEvolver:
             return OperatorEvolutionResult(
                 "REPLACE", weakest, worst, new_version, "negative_operator_credit"
             )
-        except Exception:
+        except Exception as exc:
+            logging.getLogger(__name__).warning(
+                "Operator evolution rejected: %s: %s", type(exc).__name__, str(exc)
+            )
             return None
