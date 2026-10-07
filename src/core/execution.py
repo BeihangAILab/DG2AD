@@ -124,6 +124,8 @@ class PipelineExecutor:
                         "calc_makespan_fn(candidate, env_data)"
                     )
                     candidate = candidate_env
+                if getattr(domain_evaluator, "SEQUENCE_ONLY_OBJECTIVE", False):
+                    return domain_evaluator.calc_makespan(candidate, env_data)
                 if hasattr(candidate, "sequence"):
                     evaluation_state = candidate
                 else:

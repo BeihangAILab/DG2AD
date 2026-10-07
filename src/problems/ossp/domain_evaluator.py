@@ -25,6 +25,8 @@ from src.core.configuration import problem_data_dir
 
 # ── Module-level config (set by Hydra before loading) ──
 INVALID_SCORE = 999999999.0
+# This objective depends only on the operation permutation, not state metadata.
+SEQUENCE_ONLY_OBJECTIVE = True
 
 
 def _get_instances_path():
@@ -75,6 +77,38 @@ def load_instance_group(group):
 # ── Solution evaluation ─────────────────────────────────────────────
 
 
+try:
+    from numba import njit
+except ImportError:
+    def njit(**kwargs):
+        return lambda function: function
+
+
+@njit(cache=True)
+def _schedule_makespan(seq, times, n_jobs, n_machines):
+    """Array-only equivalent of the original greedy list scheduler."""
+    job_avail = np.zeros(n_jobs, dtype=np.float64)
+    mach_avail = np.zeros(n_machines, dtype=np.float64)
+
+    seen = np.zeros(n_jobs * n_machines, dtype=np.bool_)
+    for value in seq:
+        if not np.isfinite(value) or value < 0 or value >= n_jobs * n_machines:
+            return INVALID_SCORE
+        op = int(value)
+        if value != op or seen[op]:
+            return INVALID_SCORE
+        seen[op] = True
+        job_id = op // n_machines
+        mach_id = op % n_machines
+        p_time = float(times[job_id, mach_id])
+        start = max(job_avail[job_id], mach_avail[mach_id])
+        end = start + p_time
+        job_avail[job_id] = end
+        mach_avail[mach_id] = end
+
+    return float(max(job_avail))
+
+
 def calc_makespan(sequence_or_state, env_data):
     """
     Compute OSSP makespan via greedy list scheduling.
@@ -99,32 +133,12 @@ def calc_makespan(sequence_or_state, env_data):
         return INVALID_SCORE
     try:
         raw = np.asarray(seq).ravel()
-        if not np.all(np.isfinite(raw)) or not np.all(raw == np.floor(raw)):
+        if raw.dtype.kind not in "biuf" or len(raw) != total_ops:
             return INVALID_SCORE
-        seq = raw.astype(np.int32)
     except (TypeError, ValueError, OverflowError):
         return INVALID_SCORE
 
-    if len(seq) != total_ops:
-        return INVALID_SCORE
-
-    # Validate: each operation appears exactly once
-    if seq.min() < 0 or seq.max() >= total_ops or len(set(seq)) != total_ops:
-        return INVALID_SCORE
-
-    job_avail = np.zeros(n_jobs, dtype=np.float64)
-    mach_avail = np.zeros(n_machines, dtype=np.float64)
-
-    for op in seq:
-        job_id = op // n_machines
-        mach_id = op % n_machines
-        p_time = float(times[job_id, mach_id])
-        start = max(job_avail[job_id], mach_avail[mach_id])
-        end = start + p_time
-        job_avail[job_id] = end
-        mach_avail[mach_id] = end
-
-    return float(max(job_avail))
+    return _schedule_makespan(raw, times, n_jobs, n_machines)
 
 
 # ── State initialisation ─────────────────────────────────────────────

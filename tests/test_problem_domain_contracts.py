@@ -269,6 +269,61 @@ class OperatorBehaviorTests(unittest.TestCase):
                         )
                     )
 
+    def test_3dbbp_best_pair_initialization_and_reheat(self):
+        module = load_slot(ROOT / "src/problems/3dbbp/slots/acceptance/simulated_annealing/v1.py")
+        state = SolutionState([0, 1], 1.0)
+        def score(candidate, _env):
+            sequence = candidate.sequence if hasattr(candidate, "sequence") else candidate
+            return 1.0 if list(sequence) == [0, 1] else 2.0
+        module.run({}, state, score)
+        self.assertEqual(list(state.metadata["best_seq"]), [0, 1])
+        state.sequence = [1, 0]
+        state.makespan = 2.0
+        state.metadata["no_improve"] = 80
+        with mock.patch.object(module.random, "random", return_value=0.0):
+            module.run({}, state, score)
+        self.assertEqual(list(state.sequence), [0, 1])
+        self.assertEqual(state.makespan, score(state, {}))
+        state.sequence = [1, 0]
+        state.makespan = 2.0
+        with mock.patch.object(module.random, "random", return_value=1.0):
+            module.run({}, state, score)
+        self.assertEqual(state.makespan, score(state, {}))
+
+    def test_ossp_sequence_fast_path_preserves_pipeline_result(self):
+        from src.core.execution import PipelineExecutor
+        domain = importlib.import_module("src.problems.ossp.domain_evaluator")
+        slots = ROOT / "src/problems/ossp/slots"
+        pipeline = [tuple(node.split("|")) + ("v1",) for node in domain.get_initial_pipeline()]
+        results = []
+        for enabled in (False, True):
+            random.seed(17)
+            np.random.seed(17)
+            with mock.patch.object(domain, "SEQUENCE_ONLY_OBJECTIVE", enabled):
+                results.append(PipelineExecutor(str(slots)).execute(
+                    synthetic_instance("ossp"), pipeline, domain, 3
+                ))
+        self.assertEqual(results[0], results[1])
+        self.assertIsNone(results[1][3])
+
+    def test_ossp_compiled_scheduler_matches_python(self):
+        domain = importlib.import_module("src.problems.ossp.domain_evaluator")
+        env = synthetic_instance("ossp")
+        rng = np.random.default_rng(0)
+        kernel = domain._schedule_makespan
+        reference = getattr(kernel, "py_func", kernel)
+        for _ in range(30):
+            sequence = rng.permutation(env["total_ops"])
+            args = (sequence, env["ossp_times"], env["num_jobs"], env["num_machines"])
+            self.assertEqual(kernel(*args), reference(*args))
+            self.assertEqual(domain.calc_makespan(sequence, env), reference(*args))
+        base = np.arange(env["total_ops"], dtype=float)
+        for invalid in (float("nan"), float("inf"), -1.0, 0.5, float(env["total_ops"]), 1.0):
+            sequence = base.copy()
+            sequence[0] = invalid
+            self.assertEqual(domain.calc_makespan(sequence, env), domain.INVALID_SCORE)
+
+
     def test_local_search_commits_sequence_with_score(self):
         cases = (
             (
