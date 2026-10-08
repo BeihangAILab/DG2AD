@@ -208,7 +208,7 @@ class DirectedOperatorGraph:
         delta: GraphDelta,
         max_added_edges: int,
         max_deleted_edges: int,
-        smoke_validator: Callable[[tuple[str, str], "DirectedOperatorGraph"], bool] | None = None,
+        runtime_validation_validator: Callable[[tuple[str, str], "DirectedOperatorGraph"], bool] | None = None,
         structure_mode: str = "dg",
     ) -> "DirectedOperatorGraph":
         if len(delta.add_edges) > max_added_edges:
@@ -232,10 +232,10 @@ class DirectedOperatorGraph:
         candidate.validate()
         candidate.validate_mode(structure_mode)
 
-        if smoke_validator:
+        if runtime_validation_validator:
             for edge in additions:
-                if tuple(edge) not in self.edges and not smoke_validator(tuple(edge), candidate):
-                    raise ValueError(f"Smoke test rejected graph edge: {tuple(edge)!r}")
+                if tuple(edge) not in self.edges and not runtime_validation_validator(tuple(edge), candidate):
+                    raise ValueError(f"Runtime validation test rejected graph edge: {tuple(edge)!r}")
         return candidate
 
     def to_dict(self) -> dict:

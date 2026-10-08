@@ -48,21 +48,13 @@ class SingleEngineSurfaceTests(unittest.TestCase):
         )
         self.assertNotIn("instances_per_candidate", cfg.engine)
 
-    def test_smoke_preset_only_selects_the_offline_check(self):
+
+    def test_unsupported_action_is_rejected_before_training(self):
+        import main
         with initialize_config_dir(config_dir=str((ROOT / "cfg").resolve()), version_base=None):
-            cfg = compose(
-                config_name="config",
-                overrides=["+experiment=smoke"],
-            )
-        self.assertEqual(cfg.problem.name, "fssp")
-        self.assertEqual(cfg.engine.action, "smoke")
-        self.assertEqual(cfg.engine.run_tier, "quick")
-        self.assertEqual(cfg.engine.pipeline_steps, 1)
-        self.assertEqual(cfg.engine.pipeline_timeout, 60.0)
-        self.assertEqual(cfg.engine.evaluator_workers, 1)
-        self.assertEqual(cfg.dataset.root, "data/smoke")
-        self.assertEqual(cfg.problem.target_group, "smoke")
-        self.assertNotIn("node_ablation_level", cfg.problem)
+            cfg = compose(config_name="config", overrides=["problem=fssp", "engine.action=invalid"])
+        with self.assertRaisesRegex(ValueError, "expected 'train'"):
+            main.dispatch_run(cfg, ROOT / "artifacts", None)
 
     def test_removed_instance_count_name_is_rejected(self):
         with (
@@ -88,30 +80,13 @@ class SingleEngineSurfaceTests(unittest.TestCase):
                     )
                     self.assertEqual(cfg.structure.name, structure)
 
-    def test_public_readme_describes_only_the_current_engine(self):
-        readme_path = ROOT / "README.md"
-        readme_text = readme_path.read_text(encoding="utf-8")
-        readme = readme_text.lower()
-        self.assertIn("constrained graph walks", readme)
-        self.assertIn("reinforce", readme)
-        self.assertIn("markov credit", readme)
-        self.assertIn("offline smoke test", readme)
-        self.assertIn("./assets/framework.png", readme)
+    def test_public_readme_documents_locked_training_environment(self):
+        readme = (ROOT / "README.md").read_text(encoding="utf-8").lower()
+        for text in ("constrained graph walks", "reinforce", "markov credit",
+                     "uv sync --locked --extra cu126", "python 3.13",
+                     "fixed evolution batch", "credit ablation"):
+            self.assertIn(text, readme)
         self.assertTrue((ROOT / "assets" / "framework.png").is_file())
-        self.assertEqual(readme.count("python quickstart.py"), 1)
-        self.assertIn("python 3.13", readme)
-        self.assertIn("fixed evolution batch", readme)
-        self.assertIn("credit ablation", readme)
-        for forbidden in (
-            "## news",
-            "## citation",
-            "github.com/",
-            "shields.io",
-            "accepted at",
-            "@qq.com",
-        ):
-            self.assertNotIn(forbidden, readme)
-        self.assertNotRegex(readme_text, "[\u2013\u2014]")
 
     def test_paper_experiment_presets_define_the_complete_matrices(self):
         expected = {

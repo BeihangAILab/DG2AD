@@ -18,6 +18,10 @@ def run(env_data, state, calc_makespan_fn):
     prev_mk = md.get("prev_makespan", state.makespan)
     best_mk = md.get("best_score", state.makespan)
     best_seq = md.get("best_seq")
+    if best_seq is None:
+        # A historical score without its sequence cannot be restored safely.
+        best_mk = state.makespan
+        best_seq = np.array(state.sequence, dtype=np.int32).copy()
     stagnation = md.get("no_improve", 0)
     accept_count = md.get("accept_count", 0)
     total_count = md.get("total_count", 0)

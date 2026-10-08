@@ -69,11 +69,9 @@ artifacts/
 *.safetensors
 *.onnx
 
-# Reviewer package keeps only the catalog and synthetic offline fixture.
+# Benchmark files are obtained separately; only the catalog is tracked.
 data/*
 !data/catalog.json
-!data/smoke/
-!data/smoke/**
 
-# Local translation used during drafting; the public review artifact is English.
+# Local translation used during drafting; the public documentation is English.
 README_CN.md

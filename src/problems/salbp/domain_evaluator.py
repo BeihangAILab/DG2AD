@@ -25,6 +25,8 @@ from src.core.configuration import problem_data_dir
 
 # ── Module-level config (set by Hydra before loading) ──
 INVALID_SCORE = 99999.0
+# The objective depends only on the permutation, not auxiliary state metadata.
+SEQUENCE_ONLY_OBJECTIVE = True
 
 
 def _parse_alb(filepath):
@@ -240,6 +242,53 @@ def _inst_to_env(name, filepath):
 # ── Solution evaluation ─────────────────────────────────────────────
 
 
+try:
+    from numba import njit
+except ImportError:
+    def njit(**kwargs):
+        return lambda function: function
+
+
+@njit(cache=True)
+def _first_fit_stations(seq, times, adj, cycle_time):
+    """Original topological validation and First-Fit decoder, compiled if available."""
+    num_tasks = len(seq)
+    # Validate topological order
+    pos = np.zeros(num_tasks, dtype=np.int32)
+    for i in range(num_tasks):
+        pos[seq[i]] = i
+    for u in range(num_tasks):
+        for v in range(num_tasks):
+            if adj[u, v] and pos[u] >= pos[v]:
+                return INVALID_SCORE
+
+    # Greedy First-Fit station assignment
+    task_station = np.full(num_tasks, -1, dtype=np.int32)
+    station_load = []  # list of accumulated times per station
+
+    for task in seq:
+        # Minimum station index = max station of predecessors
+        min_st = 0
+        for p in range(num_tasks):
+            if adj[p, task] and task_station[p] > min_st:
+                min_st = task_station[p]
+
+        # Find earliest feasible station >= min_st
+        assigned = False
+        for s in range(min_st, len(station_load)):
+            if station_load[s] + times[task] <= cycle_time:
+                station_load[s] += times[task]
+                task_station[task] = s
+                assigned = True
+                break
+
+        if not assigned:
+            station_load.append(times[task])
+            task_station[task] = len(station_load) - 1
+
+    return float(len(station_load))
+
+
 def calc_makespan(sequence_or_state, env_data):
     """
     Compute SALBP-1 objective: number of workstations used.
@@ -282,40 +331,7 @@ def calc_makespan(sequence_or_state, env_data):
     if len(set(seq)) != num_tasks:
         return INVALID_SCORE
 
-    # Validate topological order
-    pos = np.zeros(num_tasks, dtype=np.int32)
-    for i in range(num_tasks):
-        pos[seq[i]] = i
-    for u in range(num_tasks):
-        for v in range(num_tasks):
-            if adj[u, v] and pos[u] >= pos[v]:
-                return INVALID_SCORE
-
-    # Greedy First-Fit station assignment
-    task_station = np.full(num_tasks, -1, dtype=np.int32)
-    station_load = []  # list of accumulated times per station
-
-    for task in seq:
-        # Minimum station index = max station of predecessors
-        min_st = 0
-        for p in range(num_tasks):
-            if adj[p, task] and task_station[p] > min_st:
-                min_st = task_station[p]
-
-        # Find earliest feasible station >= min_st
-        assigned = False
-        for s in range(min_st, len(station_load)):
-            if station_load[s] + times[task] <= cycle_time:
-                station_load[s] += times[task]
-                task_station[task] = s
-                assigned = True
-                break
-
-        if not assigned:
-            station_load.append(times[task])
-            task_station[task] = len(station_load) - 1
-
-    return float(len(station_load))
+    return _first_fit_stations(seq, times, adj, cycle_time)
 
 
 # ── State initialisation ─────────────────────────────────────────────

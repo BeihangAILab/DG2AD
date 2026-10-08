@@ -116,6 +116,24 @@ class RuntimeMigrationTests(unittest.TestCase):
         )
         self.assertTrue(ok, message)
 
+    def test_runtime_validation_rejects_invalid_solution_and_timeout(self):
+        evaluator = importlib.import_module("src.problems.tsp.domain_evaluator")
+        env = synthetic_instance("tsp")
+        cases = [
+            ("def run(env_data, state, calc_makespan_fn):\n"
+             "    state.sequence = []\n    return state\n", 20.0, "invalid solution"),
+            ("def run(env_data, state, calc_makespan_fn):\n"
+             "    while True: pass\n", 2.0, "exceeded"),
+        ]
+        for code, timeout, expected in cases:
+            with self.subTest(expected=expected):
+                ok, message = validate_candidate_runtime(
+                    code, "initialization", env, evaluator.__name__,
+                    str(ROOT / "src/problems/tsp"), timeout_seconds=timeout,
+                )
+                self.assertFalse(ok)
+                self.assertIn(expected, message)
+
 
 if __name__ == "__main__":
     unittest.main()

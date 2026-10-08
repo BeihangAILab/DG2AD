@@ -26,7 +26,7 @@ from src.core.reporting import (  # noqa: E402
 
 
 def dispatch_run(cfg: DictConfig, run_dir: Path, reporter: ConsoleReporter):
-    """Dispatch training or the offline check that skips model dependencies."""
+    """Run the configured training experiment."""
     configure_dataset_root(
         PROJECT_ROOT,
         cfg_get(cfg, "dataset.root", "data"),
@@ -41,28 +41,9 @@ def dispatch_run(cfg: DictConfig, run_dir: Path, reporter: ConsoleReporter):
         sys.path.insert(0, str(problem_dir))
 
     action = str(cfg_get(cfg, "engine.action", "train")).strip().lower()
-    if action == "smoke":
-        # Keep every training-only import below this branch. The smoke check must
-        # remain usable without an API key, PyTorch, Transformers, PEFT, or model
-        # files on the machine.
-        from src.core.execution import run_offline_smoke
-
-        reporter.info("DGA2D / OFFLINE SMOKE CHECK")
-        reporter.info(f"Problem       {problem_name.upper()}")
-        reporter.info(f"Dataset       {str(cfg.problem.target_group)}")
-        reporter.info(f"Run           {run_dir}")
-        reporter.info("")
-        return run_offline_smoke(
-            domain_evaluator=domain_evaluator,
-            config=cfg,
-            source_slots=slots_dir,
-            run_dir=run_dir,
-            reporter=reporter,
-        )
     if action != "train":
-        raise ValueError(f"Unsupported engine.action={action!r}; expected 'train' or 'smoke'")
+        raise ValueError(f"Unsupported engine.action={action!r}; expected 'train'")
 
-    # Training-only imports intentionally stay below the smoke dispatch.
     from src.core.trainer import run_paper_rl_engine
     from src.utils import llm_client
 
@@ -151,11 +132,7 @@ def main(cfg: DictConfig) -> None:
     except BaseException as exc:
         if isinstance(exc, (KeyboardInterrupt, SystemExit)):
             raise
-        action = str(cfg_get(cfg, "engine.action", "train")).strip().lower()
-        reporter.exception(
-            "Smoke check failed" if action == "smoke" else "Training failed",
-            exc,
-        )
+        reporter.exception("Training failed", exc)
         raise SystemExit(1) from None
     finally:
         configure_third_party_logging(str(cfg_get(cfg, "logging.third_party_level", "WARNING")))

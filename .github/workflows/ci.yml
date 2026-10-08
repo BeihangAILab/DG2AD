@@ -1,0 +1,40 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      LLM_API_KEY: ""
+      LLM_BASE_URL: ""
+      LLM_MODEL_NAME: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.23"
+          enable-cache: true
+      - name: Check lock
+        run: uv lock --check --python 3.13
+      - name: Install CPU dependencies
+        run: uv sync --locked --extra cpu --python 3.13
+      - name: Ruff
+        run: uv run --locked --extra cpu ruff check .
+      - name: Unit tests
+        run: uv run --locked --extra cpu python -m unittest discover -s tests -v
+      - name: Training dependency imports
+        run: uv run --locked --extra cpu python -c "import torch, transformers, peft, numba; print(torch.__version__)"
+      - name: Load training configuration
+        run: uv run --locked --extra cpu python main.py --cfg job

@@ -269,26 +269,66 @@ class OperatorBehaviorTests(unittest.TestCase):
                         )
                     )
 
-    def test_3dbbp_best_pair_initialization_and_reheat(self):
-        module = load_slot(ROOT / "src/problems/3dbbp/slots/acceptance/simulated_annealing/v1.py")
-        state = SolutionState([0, 1], 1.0)
-        def score(candidate, _env):
-            sequence = candidate.sequence if hasattr(candidate, "sequence") else candidate
-            return 1.0 if list(sequence) == [0, 1] else 2.0
-        module.run({}, state, score)
-        self.assertEqual(list(state.metadata["best_seq"]), [0, 1])
-        state.sequence = [1, 0]
-        state.makespan = 2.0
-        state.metadata["no_improve"] = 80
-        with mock.patch.object(module.random, "random", return_value=0.0):
-            module.run({}, state, score)
-        self.assertEqual(list(state.sequence), [0, 1])
-        self.assertEqual(state.makespan, score(state, {}))
-        state.sequence = [1, 0]
-        state.makespan = 2.0
-        with mock.patch.object(module.random, "random", return_value=1.0):
-            module.run({}, state, score)
-        self.assertEqual(state.makespan, score(state, {}))
+    def test_annealing_best_pair_initialization_rejection_improvement_and_reheat(self):
+        for problem in ("3dbbp", "rcpsp", "salbp"):
+            with self.subTest(problem=problem):
+                module = load_slot(ROOT / "src/problems" / problem /
+                                   "slots/acceptance/simulated_annealing/v1.py")
+                state = SolutionState(np.array([0, 1]), 1.0)
+                def score(candidate, _env):
+                    seq = candidate.sequence if hasattr(candidate, "sequence") else candidate
+                    return {(0, 1): 1.0, (1, 0): 2.0, (2, 0): 0.5}[tuple(seq)]
+                module.run({}, state, score)
+                self.assertEqual(list(state.metadata["best_seq"]), [0, 1])
+                self.assertFalse(np.shares_memory(state.sequence, state.metadata["best_seq"]))
+                state.sequence = np.array([1, 0])
+                state.makespan = 2.0
+                with mock.patch.object(module.random, "random", return_value=1.0):
+                    module.run({}, state, score)
+                self.assertEqual(state.makespan, score(state, {}))
+                self.assertEqual(state.makespan, 1.0)
+                state.sequence = np.array([2, 0])
+                state.makespan = 0.5
+                module.run({}, state, score)
+                self.assertEqual(state.metadata["best_score"], 0.5)
+                self.assertEqual(list(state.metadata["best_seq"]), [2, 0])
+                self.assertFalse(np.shares_memory(state.sequence, state.metadata["best_seq"]))
+                state.sequence = np.array([1, 0])
+                state.makespan = 2.0
+                state.metadata["no_improve"] = 1000
+                with mock.patch.object(module.random, "random", return_value=0.0):
+                    module.run({}, state, score)
+                self.assertEqual(state.makespan, score(state, {}))
+                self.assertEqual(state.makespan, 0.5)
+
+    def test_salbp_first_fit_acceleration_preserves_scores_and_validation(self):
+        domain = importlib.import_module("src.problems.salbp.domain_evaluator")
+        adj = np.zeros((4, 4), dtype=np.bool_)
+        adj[0, 2] = True
+        env = {"num_tasks": 4, "cycle_time": 10,
+               "times": np.array([4, 4, 6, 6], dtype=np.int32), "adj_matrix": adj}
+        python_kernel = getattr(domain._first_fit_stations, "py_func", domain._first_fit_stations)
+        cases = [([0, 1, 2, 3], 3.0), ([0, 2, 1, 3], 2.0),
+                 ([2, 0, 1, 3], domain.INVALID_SCORE),
+                 ([0, 0, 2, 3], domain.INVALID_SCORE),
+                 ([0, 1, 2, 4], domain.INVALID_SCORE),
+                 ([-1, 1, 2, 3], domain.INVALID_SCORE),
+                 ([0, 1, 2], domain.INVALID_SCORE),
+                 ([0, 1, 2, 3.5], domain.INVALID_SCORE),
+                 ([0, 1, 2, float("nan")], domain.INVALID_SCORE),
+                 ([0, 1, 2, float("inf")], domain.INVALID_SCORE),
+                 (None, domain.INVALID_SCORE), ([], domain.INVALID_SCORE)]
+        for seq, expected in cases:
+            with self.subTest(sequence=seq):
+                self.assertEqual(domain.calc_makespan(seq, env), expected)
+                with mock.patch.object(domain, "_first_fit_stations", python_kernel):
+                    self.assertEqual(domain.calc_makespan(seq, env), expected)
+        rng = np.random.default_rng(0)
+        for _ in range(50):
+            seq = rng.permutation(4).astype(np.int32)
+            expected = python_kernel(seq, env["times"], adj, 10)
+            self.assertEqual(domain.calc_makespan(seq, env), expected)
+            self.assertEqual(domain.calc_makespan(SolutionState(seq, -1), env), expected)
 
     def test_ossp_sequence_fast_path_preserves_pipeline_result(self):
         from src.core.execution import PipelineExecutor

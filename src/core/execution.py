@@ -4,34 +4,21 @@ import collections
 import concurrent.futures
 import importlib
 import importlib.util
-import json
 import math
 import multiprocessing
 import os
-import shutil
 import sys
 import time
 import traceback
-from pathlib import Path
 from typing import Any
 
 from .contracts import (
     CandidateResult,
-    EVALUATION_SCHEMA_VERSION,
     PipelineSample,
     candidate_reward,
     reward_spec_from_domain,
     standardize_candidate_rewards,
 )
-
-
-def _write_json(path: Path, value: dict[str, Any]) -> None:
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(
-        json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True),
-        encoding="utf-8",
-    )
-    os.replace(temporary, path)
 
 
 class SolutionState:
@@ -428,122 +415,3 @@ class RewardBatchEvaluator:
         if standardize:
             standardize_candidate_rewards(results, self.reward_epsilon)
         return results
-
-
-def run_offline_smoke(
-    domain_evaluator,
-    config,
-    source_slots: str | Path,
-    run_dir: str | Path,
-    reporter,
-) -> dict[str, Any]:
-    """Execute one baseline pipeline without loading training-model dependencies."""
-    from .configuration import cfg_get
-    from .dataset import split_domain_instances
-    from .operators import RunOperatorPool
-
-    started = time.perf_counter()
-    source_slots = Path(source_slots).resolve()
-    run_dir = Path(run_dir).resolve()
-    run_dir.mkdir(parents=True, exist_ok=True)
-
-    group = str(cfg_get(config, "problem.target_group", ""))
-    splits = split_domain_instances(
-        domain_evaluator,
-        group,
-        float(cfg_get(config, "dataset.train_ratio", 0.60)),
-        float(cfg_get(config, "dataset.validation_ratio", 0.20)),
-        float(cfg_get(config, "dataset.test_ratio", 0.20)),
-        int(cfg_get(config, "dataset.split_seed", 0)),
-    )
-    route = [str(node) for node in domain_evaluator.get_initial_pipeline()]
-    if not route:
-        raise ValueError("The domain initial pipeline is empty")
-
-    pool_root = run_dir / "operator_pool"
-    if pool_root.exists():
-        shutil.rmtree(pool_root)
-    implementations: list[tuple[str, str, str]] = []
-    for component in route:
-        try:
-            category, name = component.split("|", 1)
-        except ValueError as exc:
-            raise ValueError(
-                f"Invalid initial-pipeline component {component!r}; expected category|name"
-            ) from exc
-        source = source_slots / category / name / "v1.py"
-        if not source.is_file():
-            raise FileNotFoundError(f"Baseline v1 implementation not found: {source}")
-        destination = pool_root / category / name / "v1.py"
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, destination)
-        implementations.append((category, name, "v1"))
-
-    pool = RunOperatorPool(pool_root)
-    for component in route:
-        if pool.available_versions(component) != ["v1"]:
-            raise RuntimeError(f"Smoke pool is not isolated to baseline v1: {component}")
-
-    sample = PipelineSample(nodes=route, implementations=implementations)
-    evaluator = RewardBatchEvaluator(
-        domain_evaluator=domain_evaluator,
-        slots_dir=str(pool.root),
-        pipeline_steps=int(cfg_get(config, "engine.pipeline_steps", 1)),
-        pipeline_timeout=float(cfg_get(config, "engine.pipeline_timeout", 60.0)),
-        failure_reward=float(cfg_get(config, "engine.failure_reward", -5.0)),
-        reward_epsilon=float(cfg_get(config, "engine.reward_epsilon", 1.0e-8)),
-        max_workers=1,
-    )
-    reporter.info(f"[SMOKE] Executing {len(route)} baseline operators on one training instance")
-    candidate = evaluator.evaluate(
-        [sample],
-        [splits.train[0]],
-        standardize=False,
-        evaluation_seed=int(cfg_get(config, "engine.seed", 0)),
-    )[0]
-    if candidate.failed:
-        raise RuntimeError(candidate.failure_reason or "Baseline pipeline failed")
-    if len(candidate.scores) != 1 or not math.isfinite(candidate.raw_reward):
-        raise RuntimeError("Smoke evaluation did not return one finite score and reward")
-
-    # Imported slot modules can create bytecode caches inside the isolated pool.
-    # They are runtime debris, not part of the reproducibility artifact.
-    for bytecode_cache in pool_root.rglob("__pycache__"):
-        shutil.rmtree(bytecode_cache)
-
-    elapsed = time.perf_counter() - started
-    problem_name = str(cfg_get(config, "problem.name", "unknown"))
-    manifest = {
-        "schema": "dga2d-smoke",
-        "schema_version": 1,
-        "evaluation_schema_version": EVALUATION_SCHEMA_VERSION,
-        "offline": True,
-        "problem": problem_name,
-        "dataset": {
-            "group": group,
-            "split_seed": int(cfg_get(config, "dataset.split_seed", 0)),
-            "instance": splits.manifest["train"][0],
-        },
-        "pipeline": {
-            "nodes": route,
-            "implementations": [list(item) for item in implementations],
-        },
-        "operator_hashes": pool.file_hashes(),
-    }
-    result = {
-        "schema": "dga2d-smoke-result",
-        "schema_version": 1,
-        "evaluation_schema_version": EVALUATION_SCHEMA_VERSION,
-        "status": "pass",
-        "problem": problem_name,
-        "score": candidate.scores[0],
-        "reward": candidate.raw_reward,
-        "elapsed_seconds": elapsed,
-    }
-    _write_json(run_dir / "manifest.json", manifest)
-    _write_json(run_dir / "result.json", result)
-    reporter.info(
-        f"[SMOKE] PASS  score={candidate.scores[0]:.4f}  "
-        f"reward={candidate.raw_reward:.4f}  elapsed={elapsed:.2f}s"
-    )
-    return result

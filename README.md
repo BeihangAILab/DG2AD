@@ -29,7 +29,7 @@ We introduce **DGA2D**, a framework for **system-level automated algorithm desig
 
 DGA2D **jointly evolves operator implementations and graph connectivity**. A **first-order path-dependent credit assignment mechanism** evaluates implementations in the context of their immediate predecessors, guiding implementation selection and dual-level evolution.
 
-The current engine samples constrained graph walks with a local LoRA policy and updates it using REINFORCE. Markov credit guides implementation selection and evolution, while all generations use a fixed evolution batch of shared training instances. The provided experiment presets include credit ablation, and the offline smoke test checks execution without API calls or model downloads.
+The current engine samples constrained graph walks with a local LoRA policy and updates it using REINFORCE. Markov credit guides implementation selection and evolution, while all generations use a fixed evolution batch of shared training instances. The provided experiment presets include credit ablation.
 
 The following figure shows the evolution of DGA2D on CVRP over 50 epochs. The best-so-far optimality gap decreases from 5.20% to 0.42%, with rapid early improvement, continued refinement in the middle stage, and stable convergence in the late stage.
 
@@ -58,38 +58,29 @@ across four categories of combinatorial optimization problems:
 
 #### 4.1. Installation
 
-Full runs use **Python 3.13**, an **NVIDIA CUDA GPU**, and the provided **PyTorch 2.6.0 / CUDA 12.6** dependency lock. From the repository root, create the environment and install dependencies:
+Training supports **Python 3.13** on **Windows/Linux x86-64**, with an **NVIDIA CUDA GPU** and **PyTorch 2.6.0 / CUDA 12.6**. Install [uv](https://docs.astral.sh/uv/getting-started/installation/) (0.12.23 or later in the 0.12 series), then run from the repository root:
 
-```powershell
-py -3.13 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements-cuda-py313.txt
+```bash
+uv sync --locked --extra cu126
 ```
 
-If `.venv` already uses a different Python version, move it aside before creating this environment. For Python 3.10 / PyTorch 2.5.1 / CUDA 12.1, use `py -3.10` and `requirements-cuda.txt` instead.
+uv creates `.venv` and obtains Python 3.13 if needed. If `.venv` belongs to an existing experiment or uses another Python version, use a separate checkout or set `UV_PROJECT_ENVIRONMENT` to a new directory before syncing. Keep that setting for subsequent commands. Do not sync over an environment used by a running experiment.
 
-On Linux, create the environment with `python3.13 -m venv .venv` and use `.venv/bin/python` in place of `.\.venv\Scripts\python.exe` in the commands below.
+For CPU-based unit tests and dependency checks, use `uv sync --locked --extra cpu`. The `cpu` and `cu126` options are mutually exclusive; CPU checks do not validate GPU training. Dependencies are declared in `pyproject.toml` and resolved in the committed `uv.lock`; use `--locked` to avoid implicit lock changes.
 
 #### 4.2. To run DGA2D
 
-For a minimal offline check, run:
+First prepare the benchmark group following [DATASETS.md](./DATASETS.md). For example, import locally obtained FSSP data, replacing the source path below:
 
 ```bash
-python quickstart.py
-```
-
-This launcher supports standard CPython 3.10-3.13 and creates `.venv` if needed. Initial dependency installation requires network access; the FSSP smoke check uses synthetic data without API calls or model downloads. A successful run ends with `[SMOKE] PASS`.
-
-For a full run, first prepare the benchmark group. For example, import locally obtained FSSP data, replacing the source path below:
-
-```powershell
-.\.venv\Scripts\python.exe scripts\prepare_data.py --problem fssp --group tai20_5 --source "X:\benchmarks\fssp"
-.\.venv\Scripts\python.exe scripts\prepare_data.py --problem fssp --group tai20_5 --verify-only
+uv run --locked --extra cu126 python scripts/prepare_data.py --problem fssp --group tai20_5 --source "/path/to/benchmarks/fssp"
+uv run --locked --extra cu126 python scripts/prepare_data.py --problem fssp --group tai20_5 --verify-only
 ```
 
 Copy `.env.example` to `.env` and fill in your proposer settings:
 
 ```powershell
-Copy-Item .env.example .env
+Copy-Item .env.example .env  # PowerShell; on Linux: cp .env.example .env
 ```
 
 ```dotenv
@@ -103,7 +94,7 @@ Then start DGA2D:
 
 ```powershell
 # Example: FSSP with a directed graph and first-order credit
-.\.venv\Scripts\python.exe main.py problem=fssp structure=dg credit=first
+uv run --locked --extra cu126 python main.py problem=fssp structure=dg credit=first
 ```
 
 Check out [cfg/config.yaml](./cfg/config.yaml) for more options. The default problem is `3dclp`; this example explicitly selects `fssp`.
@@ -139,8 +130,8 @@ Use `llm=openai_compatible` with the `LLM_*` settings above for an OpenAI-compat
 Add the corresponding key to `.env`, then select the configuration:
 
 ```powershell
-.\.venv\Scripts\python.exe main.py problem=fssp llm=deepseek_v4_flash
-.\.venv\Scripts\python.exe main.py problem=fssp llm=gpt_5_6_sol
+uv run --locked --extra cu126 python main.py problem=fssp llm=deepseek_v4_flash
+uv run --locked --extra cu126 python main.py problem=fssp llm=gpt_5_6_sol
 ```
 
 Override endpoint and model identifiers with `DEEPSEEK_BASE_URL` / `DEEPSEEK_MODEL_NAME` or `OPENAI_BASE_URL` / `OPENAI_MODEL_NAME` when needed.

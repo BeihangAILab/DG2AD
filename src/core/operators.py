@@ -230,13 +230,13 @@ def validate_candidate_code(code: str):
     return True, None
 
 
-def _smoke_worker(code, category, env_data, evaluator_module_name, problem_dir, result_pipe):
+def _runtime_validation_worker(code, category, env_data, evaluator_module_name, problem_dir, result_pipe):
     try:
         if problem_dir and problem_dir not in sys.path:
             sys.path.insert(0, problem_dir)
         evaluator = importlib.import_module(evaluator_module_name)
-        namespace = {"__name__": "generated_operator_smoke"}
-        exec(compile(code, "<generated-operator-smoke>", "exec"), namespace)
+        namespace = {"__name__": "generated_operator_runtime_validation"}
+        exec(compile(code, "<generated-operator-runtime_validation>", "exec"), namespace)
         state = SolutionState()
         if not category.startswith("initialization"):
             evaluator.initialize_state(env_data, state)
@@ -272,13 +272,13 @@ def validate_candidate_runtime(
     problem_dir,
     timeout_seconds=30.0,
 ):
-    """Smoke-test generated code in an isolated spawned process."""
+    """Validate generated code in an isolated spawned process."""
     if env_data is None or not evaluator_module_name:
         return True, None
     context = multiprocessing.get_context("spawn")
     receive_pipe, send_pipe = context.Pipe(duplex=False)
     process = context.Process(
-        target=_smoke_worker,
+        target=_runtime_validation_worker,
         args=(
             code,
             category,
@@ -295,13 +295,13 @@ def validate_candidate_runtime(
         process.terminate()
         process.join(5.0)
         receive_pipe.close()
-        return False, f"Generated operator smoke test exceeded {timeout_seconds:.1f}s"
+        return False, f"Generated operator runtime validation exceeded {timeout_seconds:.1f}s"
     if receive_pipe.poll(1.0):
         result = receive_pipe.recv()
         receive_pipe.close()
         return result
     receive_pipe.close()
     return False, (
-        "Generated operator smoke-test process exited without returning a result "
+        "Generated operator runtime validation process exited without returning a result "
         f"(exit code {process.exitcode})"
     )

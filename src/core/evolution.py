@@ -26,7 +26,7 @@ class GraphEvolver:
         self,
         graph: DirectedOperatorGraph,
         credit: TransitionCreditStore,
-        smoke_validator: Callable[[tuple[str, str], DirectedOperatorGraph], bool],
+        runtime_validation_validator: Callable[[tuple[str, str], DirectedOperatorGraph], bool],
     ) -> tuple[DirectedOperatorGraph, GraphDelta | None]:
         aggregates = credit.aggregate_edges()
         credited_edges = [
@@ -69,7 +69,7 @@ class GraphEvolver:
                 delta,
                 max_added_edges=1,
                 max_deleted_edges=1,
-                smoke_validator=smoke_validator,
+                runtime_validation_validator=runtime_validation_validator,
                 structure_mode=self.structure_mode,
             )
             return candidate, delta
@@ -103,14 +103,14 @@ class RuleBasedOperatorEvolver:
         llm_client,
         domain_prompt: str,
         domain_evaluator,
-        smoke_instance,
+        runtime_validation_instance,
         problem_dir: str,
     ):
         self.config = config
         self.llm = llm_client
         self.domain_prompt = domain_prompt
         self.domain_evaluator = domain_evaluator
-        self.smoke_instance = smoke_instance
+        self.runtime_validation_instance = runtime_validation_instance
         self.problem_dir = problem_dir
 
     def _generate(self, component: str, parent: str, code: str, crash: str | None):
@@ -134,7 +134,7 @@ class RuleBasedOperatorEvolver:
         valid, error = validate_candidate_runtime(
             generated,
             category,
-            self.smoke_instance,
+            self.runtime_validation_instance,
             self.domain_evaluator.__name__,
             self.problem_dir,
             timeout_seconds=min(30.0, float(cfg_get(self.config, "engine.pipeline_timeout", 90.0))),

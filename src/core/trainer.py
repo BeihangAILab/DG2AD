@@ -230,7 +230,7 @@ class PaperRLTrainer:
     def _instantiate(self, sample, pool, credit, temperature, greedy=False) -> PipelineSample:
         return instantiate_pipeline(sample, pool, credit, temperature, self.rng, greedy=greedy)
 
-    def _smoke_route(
+    def _runtime_validation_route(
         self,
         route: list[str],
         pool: RunOperatorPool,
@@ -252,11 +252,11 @@ class PaperRLTrainer:
             )[0]
             if result.failed:
                 self.reporter.warning(
-                    f"Graph route smoke rejected {route}: {result.failure_reason}"
+                    f"Graph route runtime_validation rejected {route}: {result.failure_reason}"
                 )
             return not result.failed
         except Exception as exc:
-            self.reporter.warning(f"Graph route smoke rejected: {type(exc).__name__}: {exc}")
+            self.reporter.warning(f"Graph route runtime_validation rejected: {type(exc).__name__}: {exc}")
             return False
 
     def run(self) -> dict[str, Any]:
@@ -373,7 +373,7 @@ class PaperRLTrainer:
                 if route is not None and len(route) <= initialized.max_pipeline_length
             }
             initial_graph_valid = bool(initial_routes) and all(
-                self._smoke_route(
+                self._runtime_validation_route(
                     list(route),
                     pool,
                     credit,
@@ -383,7 +383,7 @@ class PaperRLTrainer:
                 for route in initial_routes
             )
             if not initial_graph_valid:
-                self.reporter.warning("Initial graph failed smoke execution; using baseline fallback")
+                self.reporter.warning("Initial graph failed runtime_validation execution; using baseline fallback")
                 initialized = initializer._fallback(initialized.llm_response)
                 graph = initialized.graph
                 if pool_dir.exists():
@@ -394,14 +394,14 @@ class PaperRLTrainer:
                     for node in graph.shortest_path(START, END) or []
                     if node not in (START, END)
                 ]
-                if not self._smoke_route(
+                if not self._runtime_validation_route(
                     baseline_route,
                     pool,
                     credit,
                     benchmark_batch[0],
                     initialized.sampling_temperature,
                 ):
-                    raise RuntimeError("Even the safe baseline graph failed smoke execution")
+                    raise RuntimeError("Even the safe baseline graph failed runtime_validation execution")
 
             fixed_evolve_node = (
                 resolve_fixed_evolution_node(graph, self.config)
@@ -720,12 +720,12 @@ class PaperRLTrainer:
                     and generation % graph_interval == 0
                 ):
 
-                    def smoke(edge, candidate_graph):
+                    def runtime_validation(edge, candidate_graph):
                         route = candidate_graph.route_through_edge(edge)
                         return (
                             route is not None
                             and len(route) <= initialized.max_pipeline_length
-                            and self._smoke_route(
+                            and self._runtime_validation_route(
                                 route,
                                 pool,
                                 credit,
@@ -735,7 +735,7 @@ class PaperRLTrainer:
                         )
 
                     graph, delta = GraphEvolver(self.config, self.llm, self.prompt).evolve(
-                        graph, credit, smoke
+                        graph, credit, runtime_validation
                     )
                     policy.set_graph(graph)
                     generation_event["graph_evolution"] = (

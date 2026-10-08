@@ -91,7 +91,7 @@ class DirectedGraphTests(unittest.TestCase):
             ["initialization|i", "operator|a", "operator|b", "operator|a", "operator|b"],
         )
 
-    def test_smoke_failure_is_transactional(self):
+    def test_runtime_validation_failure_is_transactional(self):
         graph = self.graph()
         before = graph.to_dict()
         with self.assertRaises(ValueError):
@@ -99,7 +99,7 @@ class DirectedGraphTests(unittest.TestCase):
                 GraphDelta(add_edges=[("operator|b", "operator|a")]),
                 2,
                 2,
-                smoke_validator=lambda edge, candidate: False,
+                runtime_validation_validator=lambda edge, candidate: False,
             )
         self.assertEqual(graph.to_dict(), before)
 

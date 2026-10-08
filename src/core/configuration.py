@@ -43,7 +43,7 @@ def configure_dataset_root(project_root: str | Path, configured: str | Path) -> 
 def problem_data_dir(problem: str, private_fallback_directory: str | Path) -> Path:
     """Resolve one domain's data directory with a private-repo fallback.
 
-    Review artifacts contain no third-party benchmark files under ``src``.
+    Third-party benchmark files are stored outside ``src``.
     The fallback keeps existing private checkouts usable while data is migrated
     to ``dataset.root``.
     """
